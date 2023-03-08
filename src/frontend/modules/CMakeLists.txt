@@ -10,7 +10,8 @@ add_library(ImGui STATIC
         ${IMGUI_DIR}/imgui.cpp
         ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
         ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
-)
+        sequencer/ImSequencer.cpp
+        sequencer/ImSequencer.h)
 
 target_include_directories(ImGui PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}

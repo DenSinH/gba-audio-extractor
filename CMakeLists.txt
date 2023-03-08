@@ -5,12 +5,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 include_directories(src/include)
+include_directories(src)
 
 add_executable(GbaMusicExtractor
-        src/main.cpp
-        src/include/gba.h
-        src/include/bin.h
-        src/include/algorithm.h)
+        src/main.cpp)
 
 add_subdirectory(src/extractor)
 add_subdirectory(src/frontend)

@@ -2,7 +2,6 @@
 
 #include "types.h"
 
-
 struct Goto {
   i32 index;
 };

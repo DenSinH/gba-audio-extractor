@@ -1,7 +1,9 @@
 #pragma once
 
+struct Song;
+
 namespace frontend {
 
-int Run();
+int Run(Song* song);
 
 }

@@ -19,7 +19,7 @@ int main() {
 
   auto song = Song::Extract(util::GetPointer(start + header_offset));
 
-  frontend::Run();
+  frontend::Run(&song);
 
   return 0;
 }

@@ -25,5 +25,4 @@ static void Debug(const char* format, const Args&... args) {
     std::printf(format, args...);
     std::printf("\n");
   }
-  std::printf("\n");
 }

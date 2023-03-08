@@ -37,18 +37,21 @@ void Track::Parse(const u8* data) {
   };
 
   while (true) {
-    u8 cmd = read_byte(true);
-    if (cmd < 0x80) {
+    u8 cmd;
+    if (*data < 0x80) {
       if (last_cmd > 0) {
         cmd = last_cmd;
       }
       else {
-        Error("Expected command as first track byte, got %02x", cmd);
+        Error("Expected command as first track byte, got %02x", *data);
       }
     }
-    else if (cmd > GbaCmd::PEND && cmd != GbaCmd::TEMPO) {
-      // repeatable commands
-      last_cmd = cmd;
+    else {
+      cmd = read_byte(true);
+      if (cmd > GbaCmd::PEND && cmd != GbaCmd::TEMPO) {
+        // repeatable commands
+        last_cmd = cmd;
+      }
     }
 
     Debug("Parsing %02x command", cmd);
@@ -60,8 +63,10 @@ void Track::Parse(const u8* data) {
     switch (cmd) {
       case GbaCmd::W00 ... GbaCmd::W96: {
         current_time += LengthTable[cmd - W00];
-        // replace with null event to make sure patterns end at the right time
-        events.back() = Event{0, current_time};
+//        Debug("Wait %d until %d", LengthTable[cmd - W00], current_time);
+        // replace with null events to make sure patterns end at the right time
+        events.back().type = 0;
+        events.push_back(Event{0, current_time});
         break;
       }
       case GbaCmd::FINE: {
@@ -69,6 +74,7 @@ void Track::Parse(const u8* data) {
 
         // filter out null events and PEND events
         events = util::filter(events, [](const auto& e){ return e.type && e.type != GbaCmd::PEND; });
+        length = current_time;
         Debug("Track end, found %d commands", events.size());
         return;
       }
@@ -90,6 +96,7 @@ void Track::Parse(const u8* data) {
         }
 
         const i32 patt_start_time = events[branch_targets[diff]].time;
+//        Debug("Pattern start time %d", patt_start_time);
         events.pop_back();  // no PATT event, unpack pattern right away
 
         for (int i = branch_targets[diff]; events[i].type != GbaCmd::PEND; i++) {
@@ -111,6 +118,7 @@ void Track::Parse(const u8* data) {
         // correct current time to last events time
         // we insert null events on WAITs, so the last event will always hold
         // the correct "current" time
+//        Debug("Pattern took %d, time from %d to %d", events.back().time - current_time, current_time, events.back().time);
         current_time = events.back().time;
         break;
       }
@@ -147,7 +155,7 @@ void Track::Parse(const u8* data) {
         break;
       }
       case GbaCmd::N01 ... GbaCmd::N96: {
-        i32 length = LengthTable[cmd - GbaCmd::TIE];
+        i32 length = LengthTable[cmd - GbaCmd::N01 + 1];
         i32 note, vel;
         if (*data < 0x80) {
           last_note = note = read_byte();
@@ -178,7 +186,9 @@ void Track::Parse(const u8* data) {
       case GbaCmd::MEMACC:
       case GbaCmd::XCMD:
       case GbaCmd::EOT:
-      case GbaCmd::TIE:  // todo: how is tie different than just note?
+      case GbaCmd::TIE:
+        // todo: tie
+        // TIE: start note at TIE command, end at EOT command
       default: {
         Error("Invalid or unimplemented command: %02x", cmd);
       }

@@ -7,6 +7,7 @@
 
 struct Track {
   std::vector<Event> events{};
+  u32 length;
 
   Track(const u8* data);
 
