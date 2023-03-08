@@ -1,8 +1,7 @@
 #include "song.h"
-#include "file.h"
 #include "error.h"
-#include "gba.h"
-#include "bin.h"
+#include "util/gba.h"
+#include "util/bin.h"
 
 #define HEADER_NUM_TRACKS_OFFSET 0
 #define HEADER_REVERB_OFFSET 3

@@ -1,7 +1,7 @@
 #include "extractor/song.h"
 #include "frontend/frontend.h"
-#include "file.h"
-#include "gba.h"
+#include "util/file.h"
+#include "util/gba.h"
 
 #include <string>
 

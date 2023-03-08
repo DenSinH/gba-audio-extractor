@@ -1,7 +1,7 @@
 #include "voice.h"
 #include "error.h"
-#include "bin.h"
-#include "gba.h"
+#include "util/bin.h"
+#include "util/gba.h"
 
 
 const Voice& VoiceGroup::operator[](u32 index) {

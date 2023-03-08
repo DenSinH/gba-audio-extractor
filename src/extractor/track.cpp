@@ -1,9 +1,9 @@
 #include "track.h"
 #include "error.h"
 #include "mplaydef.h"
-#include "gba.h"
-#include "bin.h"
-#include "algorithm.h"
+#include "util/gba.h"
+#include "util/bin.h"
+#include "util/algorithm.h"
 
 
 Track::Track(const u8* data) {
