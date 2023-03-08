@@ -19,4 +19,6 @@ struct Song {
   u8 reverb;
   VoiceGroup voicegroup;
   std::vector<Track> tracks;
+
+  static Song Extract(const u8* header);
 };
