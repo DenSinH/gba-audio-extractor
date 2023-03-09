@@ -3,8 +3,74 @@
 #include "util/bin.h"
 #include "util/gba.h"
 
+#include "midi.h"
+#include <cmath>
 
-const Voice& VoiceGroup::operator[](u32 index) {
+
+double ProgrammableWave::WaveForm(int midi_key, double dt) const {
+  // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
+  double freq = CgbMidiKeyToFreq(midi_key, 0);
+
+  int sample_index = (int)(16 * freq * dt) % 32;
+  u8 sample = samples[sample_index >> 1];
+  if (!(sample_index & 1)) {
+    sample = sample >> 4;
+  }
+  return double(sample & 0xf) / 15.0;
+}
+
+double DirectSound::WaveForm(int midi_key, double dt) const {
+  // compute channel frequency at which samples are requested
+  const double chanFreq = MidiKeyToFreq(freq, midi_key, 0);
+
+  // so if time is dt, we are at sample
+  const double sampleIndex = dt * chanFreq;
+  u32 sampleIndexCourse = u32(sampleIndex);
+
+  // todo: interpolation with:
+  const double sampleIndexFine = sampleIndex - sampleIndexCourse;
+  if (sampleIndexCourse > samples.size()) {
+    sampleIndexCourse = loop_start + (sampleIndexCourse % (samples.size() - loop_start));
+  }
+
+  return double(i8(samples[sampleIndexCourse])) / 256.0;
+}
+
+double Square::WaveForm(int midi_key, double dt) const {
+  double freq = CgbMidiKeyToFreq(midi_key, 0);
+  double in_period = (freq * dt) - std::floor(freq * dt);
+
+  return (DutyCycle[duty_cycle] & (0x80 >> u32(in_period * 8))) ? -0.5 : 0.5;
+}
+
+double Noise::WaveForm(int midi_key, double dt) const {
+  return 0;
+}
+
+double Keysplit::WaveForm(int midi_key, double dt) const {
+  return 0;
+  u8 key = midi_key;
+  const Voice* voice;
+  if (table) {
+    voice = &(*split)[table[key]];
+  }
+  else {
+    voice = &(*split)[key];
+  }
+
+  if (voice->type == Voice::Type::KeysplitAltRhythm || voice->type == Voice::Type::Keysplit) {
+    // nested keysplit instruments
+    return 0;
+  }
+  if (type == Voice::Type::KeysplitAltRhythm) {
+    // todo: pan
+    key = voice->base;
+  }
+
+  return voice->WaveForm(key, dt);
+}
+
+const Voice& VoiceGroup::operator[](u32 index) const {
   if (index >= voices.size()) {
     auto old_size = voices.size();
     voices.resize(index + 1);
@@ -15,7 +81,7 @@ const Voice& VoiceGroup::operator[](u32 index) {
   return *voices[index];
 }
 
-std::unique_ptr<Voice> VoiceGroup::ParseNext() {
+std::unique_ptr<Voice> VoiceGroup::ParseNext() const {
   std::unique_ptr<Voice> voice;
   u8 type = *data++;
   u8 base = *data++;
@@ -45,11 +111,12 @@ std::unique_ptr<Voice> VoiceGroup::ParseNext() {
         Error("Unknown directsound wave data type: %x", type);
       }
 
-      u32 loop_start = util::Read<u32>(&wave_data[8]);
-      u32 size       = util::Read<u32>(&wave_data[12]);
+      _voice->freq       = util::Read<u32>(&wave_data[4]);
+      _voice->loop_start = util::Read<u32>(&wave_data[8]);
 
+      u32 size = util::Read<u32>(&wave_data[12]);
       _voice->samples = {&wave_data[16], &wave_data[16 + size]};
-      _voice->loop_start = loop_start;
+
       voice = std::move(_voice);
       break;
     }
@@ -100,7 +167,7 @@ std::unique_ptr<Voice> VoiceGroup::ParseNext() {
       break;
     }
     case Voice::Type::Keysplit:
-    case Voice::Type::KeysplitAlt: {
+    case Voice::Type::KeysplitAltRhythm: {
       auto _voice = std::make_unique<Keysplit>();
       // already skipped one byte for "base" data
       data++;  // sbz
@@ -110,14 +177,14 @@ std::unique_ptr<Voice> VoiceGroup::ParseNext() {
       data += sizeof(u32);
 
       _voice->split = (voice_group == original_data) ? nullptr : std::make_unique<VoiceGroup>(voice_group);
-      _voice->table = (void*)util::GetPointer(util::Read<u32>(data));
+      _voice->table = util::GetPointer(util::Read<u32>(data));
       data += sizeof(u32);
 
       voice = std::move(_voice);
       break;
     }
     default: {
-      Error("Unknown type for voice: %x (%d)", type, type);
+      Error("Unknown type for voice: %x (%d) while parsing index %llu", type, type, voices.size());
     }
   }
 

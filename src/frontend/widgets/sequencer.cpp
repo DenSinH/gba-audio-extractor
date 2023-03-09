@@ -5,11 +5,10 @@
 
 namespace frontend {
 
-Sequencer::Sequencer(Song* song) : song{song} {
+Sequencer::Sequencer(const Song* song) : song{song} {
   max_frame = 0;
   for (const auto& track : song->tracks) {
     max_frame = std::max(max_frame, track.length);
-    std::printf("%d\n", track.length);
   }
 }
 
@@ -36,18 +35,18 @@ std::string Sequencer::GetTimelineLabel(int index) const {
 void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int* color) const {
   const auto& event = song->tracks[timeline].events[index];
   if (start)
-    *start = event.time;
+    *start = event.tick;
   if (end) {
-    if (event.type >= GbaCmd::TIE && event.type <= GbaCmd::N96) {
-      *end = event.time + event.note.length;
+    if (event.type == Event::Type::Note) {
+      *end = event.tick + event.note.length;
     }
     else {
-      *end = event.time + 1;
+      *end = event.tick + 1;
     }
   }
   if (color) {
     switch (event.type) {
-      case GbaCmd::TIE ... GbaCmd::N96:
+      case Event::Type::Note:
         *color = 0xffaa8080;
         break;
       default:

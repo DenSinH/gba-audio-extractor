@@ -1,10 +1,6 @@
+file(GLOB EXTRACTOR_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+file(GLOB EXTRACTOR_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
+
 add_library(Extractor STATIC
-        note.h
-        song.h
-        voice.h
-        event.h
-        track.h
-        track.cpp
-        voice.cpp
-        mplaydef.h
-        song.cpp)
+        ${EXTRACTOR_SOURCES}
+        ${EXTRACTOR_HEADERS})

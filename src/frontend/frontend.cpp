@@ -4,6 +4,7 @@
 #include "imgui_impl_opengl3.h"
 #include <cstdio>
 #include <SDL.h>
+#include "extractor/player.h"
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <SDL_opengles2.h>
 #else
@@ -23,14 +24,41 @@ static SDL_Window* window;
 static SDL_GLContext gl_context;
 static const char* glsl_version = "#version 130";
 
-void InitSDL() {
+Player* gPlayer;
+bool audio_paused = false;
+Sample last_sample = {};
 
-  // Setup SDL
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
-  {
-    printf("Failed to initialize SDL: %s\n", SDL_GetError());
-    exit(1);
+static void TestAudioCallback(void*, u8* stream, int len);
+
+static SDL_AudioSpec audio_spec = {
+    .freq = 44100,        // sample rate
+    .format = AUDIO_F32,
+    .channels = 2,
+    .samples = 512,
+    .callback = TestAudioCallback
+};
+
+static void TestAudioCallback(void*, u8* _stream, int len) {
+  float* stream = (float*)_stream;
+
+  if (!audio_paused) {
+    for (int i = 0; i < len / sizeof(float); i += 2) {
+      gPlayer->TickTime(1.0f / audio_spec.freq);
+      const auto sample = gPlayer->GetSample();
+      stream[i]     = 0.2 * sample.left;
+      stream[i + 1] = 0.2 * sample.right;
+      last_sample = sample;
+    }
   }
+  else {
+    for (int i = 0; i < len / sizeof(float); i += 2) {
+      stream[i]     = 0.2 * last_sample.left;
+      stream[i + 1] = 0.2 * last_sample.right;
+    }
+  }
+}
+
+void InitSDLVideo() {
 
   // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -77,6 +105,25 @@ void InitSDL() {
   SDL_GL_SetSwapInterval(1); // Enable vsync
 }
 
+void InitSDLAudio() {
+  if ( SDL_OpenAudio(&audio_spec, NULL) < 0 ) {
+    printf("Unable to open audio: %s\n", SDL_GetError());
+    exit(1);
+  }
+  SDL_PauseAudio(0);
+}
+
+void InitSDL() {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
+  {
+    printf("Failed to initialize SDL: %s\n", SDL_GetError());
+    exit(1);
+  }
+
+  InitSDLVideo();
+  InitSDLAudio();
+}
+
 void InitImGui() {
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -105,12 +152,13 @@ void Destroy() {
 }
 
 
-int Run(Song* song) {
+int Run(Player* player) {
+  gPlayer = player;
   InitSDL();
   InitImGui();
 
   ImGuiIO& io = ImGui::GetIO();
-  auto sequencer = Sequencer(song);
+  auto sequencer = Sequencer(player->song);
 
   // Main loop
   bool done = false;
@@ -141,6 +189,12 @@ int Run(Song* song) {
 //    if (true) ImGui::ShowDemoWindow(nullptr);
 
     sequencer.Draw();
+    if (ImGui::Begin("Controls")) {
+      if (ImGui::Button("Pause/Play")) {
+        audio_paused ^= true;
+      }
+    }
+    ImGui::End();
 
     // Rendering
     ImGui::Render();

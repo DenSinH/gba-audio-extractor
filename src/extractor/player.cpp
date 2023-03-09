@@ -1,0 +1,150 @@
+#include "player.h"
+#include "error.h"
+
+
+static inline double TimePerTick(u32 bpm) {
+  // 96 ticks per 4 beats
+  return (60.0 / bpm) / 24.0;
+}
+
+void Player::InitTracks() {
+  statuses = {};
+  for (const auto& track : song->tracks) {
+    statuses.emplace_back();
+    statuses.back().current_event = track.events.data();
+    HandleEvents(track, statuses.back());
+  }
+
+  if (time_per_tick == 0) {
+    Error("No tempo found at start of song");
+  }
+}
+
+void Player::TickTime(double dt) {
+  global_time += dt;
+  fine_time += dt;
+
+  // this while is excessive, but may theoretically be
+  // needed
+  while (fine_time > time_per_tick) {
+    fine_time -= time_per_tick;
+    for (int i = 0; i < statuses.size(); i++) {
+      statuses[i].tick++;
+      TickTrack(song->tracks[i], statuses[i]);
+    }
+  }
+}
+
+void Player::HandleEvents(const Track& track, TrackStatus& status) {
+  while (status.current_event->tick <= status.tick) {
+    const auto& event = *status.current_event;
+
+    switch (event.type) {
+      case Event::Type::Meta: [[unlikely]]
+        Error("Stray meta event");
+      case Event::Type::Goto: {
+        status.tick = event.got.tick;
+        status.current_event = track.events.data();
+        while (status.current_event->tick < event.got.tick) {
+          status.current_event++;
+        }
+        // we don't want to increment status.current_event
+        // there may be more events that have to happen though,
+        // for example, a note may start playing right away after
+        // the goto
+        continue;
+      }
+      case Event::Type::Tempo: {
+        time_per_tick = TimePerTick(event.tempo.bpm);
+        break;
+      }
+      case Event::Type::VoiceChange: {
+        status.voice = &song->voicegroup[event.voice_change.voice];
+        break;
+      }
+      case Event::Type::Controller: {
+        switch (event.controller.type) {
+          case Controller::Type::VOL: {
+            status.volume = event.controller.vol / 127.0;
+            break;
+          }
+          case Controller::Type::PAN:
+          case Controller::Type::BEND:
+          case Controller::Type::BENDR:
+          case Controller::Type::LFOS:
+          case Controller::Type::LFODL:
+          case Controller::Type::MOD:
+          case Controller::Type::MODT:
+          case Controller::Type::TUNE: {
+//            Error("Unimplemented controller event: %02x", static_cast<u8>(event.controller.type));
+            break;
+          }
+        }
+        break;
+      }
+      case Event::Type::Note: {
+        status.current_notes.push_back(PlayingNote{
+            global_time - fine_time,
+            event.tick,
+            &event.note
+        });
+        break;
+      }
+      case Event::Type::Fine:
+        return;
+    }
+
+    status.current_event++;
+  }
+}
+
+void Player::HandleNotes(const Track& track, TrackStatus& status) {
+  if (status.current_notes.empty()) {
+    return;
+  }
+
+  if (!status.voice) {
+    Error("No voice selected while notes are requested");
+  }
+
+  auto note = status.current_notes.begin();
+  while (note != status.current_notes.end()) {
+
+    if (note->tick_started + note->note->length == status.tick) {
+      // note ended
+      status.current_notes.erase(note++);
+    }
+    else {
+      note++;
+    }
+  }
+}
+
+void Player::TickTrack(const Track& track, TrackStatus& status) {
+  if (status.current_event->type == Event::Type::Fine) {
+    // track finished
+    status.current_notes = {};
+    return;
+  }
+
+  HandleEvents(track, status);
+  HandleNotes(track, status);
+}
+
+Sample Player::GetSample() const {
+  double total = 0;
+  for (const auto& status : statuses) {
+    double superposition = 0;
+    for (const auto& note : status.current_notes) {
+      const auto key  = note.note->key;
+      const double dt = global_time - note.time_started;
+      superposition += status.voice->WaveForm(key, dt);
+    }
+    total += superposition * status.volume;
+  }
+
+  return Sample{
+      (float)total,
+      (float)total
+  };
+}

@@ -7,9 +7,9 @@ namespace frontend {
 
 struct Sequencer final : public ImSequencer::SequenceInterface {
   bool show = true;
-  Song* song;
+  const Song* song;
 
-  explicit Sequencer(Song* song);
+  explicit Sequencer(const Song* song);
 
   void Draw();
 

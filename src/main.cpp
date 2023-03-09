@@ -1,4 +1,4 @@
-#include "extractor/song.h"
+#include "extractor/player.h"
 #include "frontend/frontend.h"
 #include "util/file.h"
 #include "util/gba.h"
@@ -17,9 +17,10 @@ int main() {
   u32 start = 14524276;
   u32 header_offset = 1156;
 
-  auto song = Song::Extract(util::GetPointer(start + header_offset));
+  auto song   = Song::Extract(util::GetPointer(start + header_offset));
+  auto player = Player(&song);
 
-  frontend::Run(&song);
+  frontend::Run(&player);
 
   return 0;
 }
