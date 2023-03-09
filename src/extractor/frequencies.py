@@ -60,15 +60,15 @@ def other(key, fineAdjust=0):
 
 
 if __name__ == '__main__':
+    for key in range(256):
+        if not (key % 8):
+            print("\n    ", end="")
+        print(f"{noise(key):.8f},".ljust(17, " "), end="")
+
     # for key in range(256):
     #     if not (key & 0xf):
     #         print("\n    ", end="")
     #     print(f"{noise(key):.3f}, ", end="")
-
-    for key in range(256):
-        if not (key & 0xf):
-            print("\n    ", end="")
-        print(f"{noise(key):.3f}, ", end="")
     #
     # for key in range(256):
     #     if not (key & 0xf):

@@ -25,7 +25,7 @@ static SDL_GLContext gl_context;
 static const char* glsl_version = "#version 130";
 
 Player* gPlayer;
-bool audio_paused = false;
+bool audio_paused = true;
 Sample last_sample = {};
 
 static void TestAudioCallback(void*, u8* stream, int len);

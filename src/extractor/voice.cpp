@@ -4,8 +4,9 @@
 #include "util/gba.h"
 
 #include "midi.h"
-#include <cmath>
+#include "noise.h"
 
+#include <cmath>
 
 double ProgrammableWave::WaveForm(int midi_key, double dt) const {
   // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
@@ -44,11 +45,24 @@ double Square::WaveForm(int midi_key, double dt) const {
 }
 
 double Noise::WaveForm(int midi_key, double dt) const {
-  return 0;
+  const double time = dt * NoiseFreqTable[midi_key];
+  if (period) {
+    // 7 bits
+    const u32 index = (u32)time % (8 * NoiseSequence7.size());
+    const u8  sample_set = NoiseSequence7[index / 8];
+    const u32 sample_index = index % 8;
+    return (sample_set & (0x80 >> sample_index)) ? -0.5 : 0.5;
+  }
+  else {
+    // 15 bits
+    const u32 index = (u32)time % (8 * NoiseSequence15.size());
+    const u8  sample_set = NoiseSequence15[index / 8];
+    const u32 sample_index = index % 8;
+    return (sample_set & (0x80 >> sample_index)) ? -0.5 : 0.5;
+  }
 }
 
 double Keysplit::WaveForm(int midi_key, double dt) const {
-  return 0;
   u8 key = midi_key;
   const Voice* voice;
   if (table) {
@@ -181,7 +195,11 @@ std::unique_ptr<Voice> VoiceGroup::ParseNext() const {
       data += sizeof(u32);
 
       voice = std::move(_voice);
-      break;
+
+      // no attack / decay / sustain / release in keysplit voices
+      voice->type = type;
+      voice->base = base;
+      return voice;
     }
     default: {
       Error("Unknown type for voice: %x (%d) while parsing index %llu", type, type, voices.size());
