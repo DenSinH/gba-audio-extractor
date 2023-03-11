@@ -20,6 +20,16 @@ int main() {
   auto song   = Song::Extract(util::GetPointer(start + header_offset));
   auto player = Player(&song);
 
+  player.SkipToTick(1280);
+//  player.SetTrackEnable(0, false);
+//  player.SetTrackEnable(1, false);
+//  player.SetTrackEnable(2, false);
+//  player.SetTrackEnable(3, false);
+//  player.SetTrackEnable(4, false);
+//  player.SetTrackEnable(5, false);
+//  player.SetTrackEnable(6, false);
+//  player.SetTrackEnable(7, false);
+
   frontend::Run(&player);
 
   return 0;

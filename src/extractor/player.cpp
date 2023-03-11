@@ -7,6 +7,35 @@ static inline double TimePerTick(u32 bpm) {
   return (60.0 / bpm) / 24.0;
 }
 
+void Player::SetTrackEnable(i32 track, bool value) {
+  if (track >= statuses.size()) {
+    Error("Track out of range for song: %d", track);
+  }
+
+  statuses[track].enabled = value;
+}
+
+int Player::GetCurrentTick() const {
+  return statuses[0].tick;
+}
+
+void Player::Reset() {
+  global_time   = 0;
+  time_per_tick = 0;
+  fine_time     = 0;
+  statuses = {};
+  InitTracks();
+}
+
+void Player::SkipToTick(i32 tick) {
+  // reset and tick tracks until given tick
+  Reset();
+  for (i32 i = 0; i < tick; i++) {
+    global_time += time_per_tick;
+    TickTracks();
+  }
+}
+
 void Player::InitTracks() {
   statuses = {};
   for (const auto& track : song->tracks) {
@@ -22,16 +51,20 @@ void Player::InitTracks() {
 
 void Player::TickTime(double dt) {
   global_time += dt;
-  fine_time += dt;
+  fine_time   += dt;
 
   // this while is excessive, but may theoretically be
   // needed
   while (fine_time > time_per_tick) {
     fine_time -= time_per_tick;
-    for (int i = 0; i < statuses.size(); i++) {
-      statuses[i].tick++;
-      TickTrack(song->tracks[i], statuses[i]);
-    }
+    TickTracks();
+  }
+}
+
+void Player::TickTracks() {
+  for (int i = 0; i < statuses.size(); i++) {
+    statuses[i].tick++;
+    TickTrack(song->tracks[i], statuses[i]);
   }
 }
 
@@ -134,11 +167,14 @@ void Player::TickTrack(const Track& track, TrackStatus& status) {
 Sample Player::GetSample() const {
   double total = 0;
   for (const auto& status : statuses) {
+    if (!status.enabled) continue;
+
     double superposition = 0;
     for (const auto& note : status.current_notes) {
       const auto key  = note.note->key;
       const double dt = global_time - note.time_started;
-      superposition += status.voice->WaveForm(key, dt);
+      const double amp = status.voice->WaveForm(key, dt);
+      superposition += amp * note.note->velocity / 128.0;
     }
     total += superposition * status.volume;
   }

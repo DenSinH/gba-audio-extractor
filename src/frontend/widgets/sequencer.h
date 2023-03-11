@@ -1,21 +1,20 @@
 #pragma once
 
-#include "extractor/song.h"
+#include "extractor/player.h"
 #include "sequencer/ImSequencer.h"
 
 namespace frontend {
 
 struct Sequencer final : public ImSequencer::SequenceInterface {
   bool show = true;
-  const Song* song;
+  const Player* player;
 
-  explicit Sequencer(const Song* song);
+  explicit Sequencer(const Player* player);
 
   void Draw();
 
 private:
   u32 max_frame;
-  int current_frame = 0;
   int selected = -1;
   int first_frame = 0;
 

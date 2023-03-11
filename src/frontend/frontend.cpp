@@ -158,7 +158,7 @@ int Run(Player* player) {
   InitImGui();
 
   ImGuiIO& io = ImGui::GetIO();
-  auto sequencer = Sequencer(player->song);
+  auto sequencer = Sequencer(player);
 
   // Main loop
   bool done = false;

@@ -5,9 +5,9 @@
 
 namespace frontend {
 
-Sequencer::Sequencer(const Song* song) : song{song} {
+Sequencer::Sequencer(const Player* player) : player{player} {
   max_frame = 0;
-  for (const auto& track : song->tracks) {
+  for (const auto& track : player->song->tracks) {
     max_frame = std::max(max_frame, track.length);
   }
 }
@@ -21,11 +21,11 @@ int Sequencer::GetFrameMax() const {
 }
 
 int Sequencer::GetTimelineCount() const {
-  return song->tracks.size();
+  return player->song->tracks.size();
 }
 
 int Sequencer::GetTimelineItemCount(int index) const {
-  return song->tracks[index].events.size();
+  return player->song->tracks[index].events.size();
 }
 
 std::string Sequencer::GetTimelineLabel(int index) const {
@@ -33,7 +33,7 @@ std::string Sequencer::GetTimelineLabel(int index) const {
 }
 
 void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int* color) const {
-  const auto& event = song->tracks[timeline].events[index];
+  const auto& event = player->song->tracks[timeline].events[index];
   if (start)
     *start = event.tick;
   if (end) {
@@ -57,7 +57,7 @@ void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int*
 }
 
 void Sequencer::DoubleClick(int timeline, int index) {
-  selected_event = &song->tracks[timeline].events[index];
+  selected_event = &player->song->tracks[timeline].events[index];
 }
 
 void Sequencer::Draw() {
@@ -65,7 +65,7 @@ void Sequencer::Draw() {
     ImGui::End();
     return;
   }
-
+  int current_frame = player->GetCurrentTick();
   ImSequencer::Sequencer(
      this, &current_frame, nullptr, &selected, &first_frame
   );

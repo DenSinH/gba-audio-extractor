@@ -35,6 +35,10 @@ struct Voice {
   virtual ~Voice() = default;
 
   virtual double WaveForm(int midi_key, double dt) const = 0;
+  void CalculateEnvelope();
+
+private:
+
 };
 
 

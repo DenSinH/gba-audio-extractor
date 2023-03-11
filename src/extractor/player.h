@@ -16,6 +16,9 @@ struct Player {
 
   void TickTime(double dt);
   Sample GetSample() const;
+  void SetTrackEnable(i32 track, bool value);
+  int GetCurrentTick() const;
+  void SkipToTick(i32 tick);
 
 private:
   double time_per_tick = 0;
@@ -29,6 +32,9 @@ private:
   };
 
   struct TrackStatus {
+    // external control
+    bool enabled = true;
+
     i32 tick = 0;
     double volume = 0;
     const Event* current_event;
@@ -38,7 +44,9 @@ private:
 
   std::vector<TrackStatus> statuses{};
 
+  void Reset();
   void InitTracks();
+  void TickTracks();
   void TickTrack(const Track& track, TrackStatus& status);
   void HandleEvents(const Track& track, TrackStatus& status);
   void HandleNotes(const Track& track, TrackStatus& status);

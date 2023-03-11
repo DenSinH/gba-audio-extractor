@@ -8,6 +8,23 @@
 
 #include <cmath>
 
+void Voice::CalculateEnvelope() {
+  // from https://github.com/Kurausukun/pokeemerald/blob/54e55cf040e8ef4b11632a0af14b9f512827d92a/src/sound_mixer.c#L122:
+  // MP2K envelope shape
+  //                                                                 |
+  // (linear)^                                                       |
+  // Attack / \Decay (exponential)                                   |
+  //       /   \_                                                    |
+  //      /      '.,        Sustain                                  |
+  //     /          '.______________                                 |
+  //    /                           '-.       Echo (linear)          |
+  //   /                 Release (exp) ''--..|\                      |
+  //  /                                        \                     |
+  static constexpr double FrameTime = 1.0 / 59.7275;
+  const double time_until_attack_finish = attack ? FrameTime * 255.0 / attack : 0;
+  const double time_until_decay_finish  = decay ? FrameTime * 255.0  / attack : 0;
+}
+
 double ProgrammableWave::WaveForm(int midi_key, double dt) const {
   // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
   double freq = CgbMidiKeyToFreq(midi_key, 0);
@@ -213,6 +230,9 @@ std::unique_ptr<Voice> VoiceGroup::ParseNext() const {
   voice->decay   = *data++;
   voice->sustain = *data++;
   voice->release = *data++;
+
+  // compute envelope only once
+  voice->CalculateEnvelope();
 
   return voice;
 }
