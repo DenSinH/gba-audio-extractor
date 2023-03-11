@@ -120,3 +120,24 @@ const u32 gFreqTable[] = {
     2147483648u, 2275179671u, 2410468894u, 2553802834u, 2705659852u, 2866546760u,
     3037000500u, 3217589947u, 3408917802u, 3611622603u, 3826380858u, 4053909305u,
 };
+
+
+
+Envelope for CGB channels:
+
+attack/decay/release values: envelope step time in registers
+ goes up from 0 to 15 with steps of 1 per set time (val/64s)
+
+sustain: sustain volume on scale of 0 to 15
+
+Envelope for PCM channel:
+
+attack:  linear increment every frame until 255
+decay:   exponential decay (/256) until sustain
+sustain: sustain volume (0 to 255)
+release: exponential until echovolume
+
+echo: linear (-1) starting from echovolume, set by XIECV command
+
+Example: bgmMinishCap, voice group 51,
+         voice 0 in measure 33, track 5 (about 2400 ticks)

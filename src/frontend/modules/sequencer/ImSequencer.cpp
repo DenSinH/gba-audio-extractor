@@ -63,7 +63,7 @@ namespace ImSequencer
       int cy = (int)(io.MousePos.y);
       static float framePixelWidth = 10.f;
       static float framePixelWidthTarget = 10.f;
-      int legendWidth = 200;
+      int legendWidth = 75;
 
       int ItemHeight = 20;
 

@@ -76,6 +76,14 @@ void Player::HandleEvents(const Track& track, TrackStatus& status) {
       case Event::Type::Meta: [[unlikely]]
         Error("Stray meta event");
       case Event::Type::Goto: {
+        const auto diff = status.tick - event.got.tick;
+        // correct currently playing notes for tick so that
+        // the release plays off properly, and the note is removed
+        // at the right time
+        for (auto& note : status.current_notes) {
+          note.tick_started -= diff;
+        }
+
         status.tick = event.got.tick;
         status.current_event = track.events.data();
         while (status.current_event->tick < event.got.tick) {
@@ -119,6 +127,7 @@ void Player::HandleEvents(const Track& track, TrackStatus& status) {
         status.current_notes.push_back(PlayingNote{
             global_time - fine_time,
             event.tick,
+            std::numeric_limits<double>::infinity(),
             &event.note
         });
         break;
@@ -142,14 +151,33 @@ void Player::HandleNotes(const Track& track, TrackStatus& status) {
 
   auto note = status.current_notes.begin();
   while (note != status.current_notes.end()) {
+    const auto note_end = note->tick_started + note->note->length;
+    if (note_end == status.tick) {
+      // note ended, may be in release state
+      if (!status.voice->release) {
+        status.current_notes.erase(note++);
+        continue;
+      }
+      else {
+        note->time_released = global_time - fine_time;
+      }
+    }
+    else if (note_end < status.tick) {
+      // released note
+      const double echoVol = status.voice->GetEnvelopeVolume(
+          0,
+          global_time - note->time_started,
+          global_time - note->time_released
+      );
 
-    if (note->tick_started + note->note->length == status.tick) {
-      // note ended
-      status.current_notes.erase(note++);
+      // todo: check echo volume from track
+      if (echoVol < (1 / 255.0)) {
+        // echo volume cutoff
+        status.current_notes.erase(note++);
+        continue;
+      }
     }
-    else {
-      note++;
-    }
+    note++;
   }
 }
 
@@ -171,9 +199,11 @@ Sample Player::GetSample() const {
 
     double superposition = 0;
     for (const auto& note : status.current_notes) {
-      const auto key  = note.note->key;
-      const double dt = global_time - note.time_started;
-      const double amp = status.voice->WaveForm(key, dt);
+      const auto key                  = note.note->key;
+      const double dt                 = global_time - note.time_started;
+      const double time_since_release = global_time - note.time_released;
+
+      const double amp = status.voice->GetSample(key, dt, time_since_release);
       superposition += amp * note.note->velocity / 128.0;
     }
     total += superposition * status.volume;

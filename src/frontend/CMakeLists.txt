@@ -4,7 +4,7 @@ add_library(Frontend STATIC
         frontend.cpp
         frontend.h
         widgets/sequencer.cpp
-        widgets/sequencer.h)
+        widgets/sequencer.h widgets/event_tables.cpp widgets/event_tables.h)
 
 target_include_directories(Frontend PRIVATE
         ${SDL2_INCLUDE_DIR}

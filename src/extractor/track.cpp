@@ -17,11 +17,12 @@ void Track::Parse(const u8* data) {
   // branch_target[offset from track_start] = index into events
   std::vector<i32> branch_targets{};
 
-  i32 keyshift     = 0;
-  i32 last_cmd     = -1;
-  i32 last_note    = -1;
-  i32 last_vel     = -1;
-  i32 current_tick = 0;
+  i32 keyshift      = 0;
+  i32 last_cmd      = -1;
+  i32 last_note     = -1;
+  i32 last_vel      = -1;
+  i32 current_tick  = 0;
+  Note* current_tie = nullptr;
 
   const auto read_byte = [&](bool branchable = false) {
     branch_targets.emplace_back(branchable ? events.size() : -1);
@@ -54,7 +55,7 @@ void Track::Parse(const u8* data) {
       }
     }
 
-    Debug("Parsing %02x command", cmd);
+    // Debug("Parsing %02x command", cmd);
     events.push_back(Event{
       // initialize as meta event (ignored)
       Event::Type::Meta,
@@ -69,7 +70,7 @@ void Track::Parse(const u8* data) {
       }
       case GbaCmd::W01 ... GbaCmd::W96: {
         current_tick += LengthTable[cmd - W00];
-//        Debug("Wait %d until %d", LengthTable[cmd - W00], current_tick);
+        // Debug("Wait %d until %d", LengthTable[cmd - W00], current_tick);
         // replace with null events to make sure patterns end at the right tick
         events.back().meta.type = Meta::Type::Wait;
         events.push_back(Event{Event::Type::Meta, current_tick});
@@ -77,6 +78,9 @@ void Track::Parse(const u8* data) {
         break;
       }
       case GbaCmd::FINE: {
+        if (current_tie) {
+          Error("Unended TIE at FINE command");
+        }
         events.back().type = Event::Type::Fine;
 
         // filter out null events and PEND events
@@ -86,6 +90,9 @@ void Track::Parse(const u8* data) {
         return;
       }
       case GbaCmd::GOTO: {
+        if (current_tie) {
+          Error("Unended TIE at GOTO command");
+        }
         events.back().type = Event::Type::Goto;
         const auto dest = util::GetPointer(read_word());
         const auto diff = dest - track_start;
@@ -107,7 +114,7 @@ void Track::Parse(const u8* data) {
 
         const i32 patt_start_tick  = events[branch_targets[diff]].tick;
         const i32 patt_start_keysh = keyshift;
-//        Debug("Pattern start tick %d", patt_start_tick);
+        // Debug("Pattern start tick %d", patt_start_tick);
         events.pop_back();  // no PATT event, unpack pattern right away
 
         for (int i = branch_targets[diff];; i++) {
@@ -136,7 +143,7 @@ void Track::Parse(const u8* data) {
         // correct current tick to last events tick
         // we insert null events on WAITs, so the last event will always hold
         // the correct "current" tick
-//        Debug("Pattern took %d, tick from %d to %d", events.back().tick - current_tick, current_tick, events.back().tick);
+        // Debug("Pattern took %d, tick from %d to %d", events.back().tick - current_tick, current_tick, events.back().tick);
         current_tick = events.back().tick;
         break;
       }
@@ -206,10 +213,41 @@ void Track::Parse(const u8* data) {
         };
         break;
       }
+      case GbaCmd::TIE: {
+        if (current_tie) {
+          Error("Interleaved TIE in track");
+        }
+        events.back().type = Event::Type::Note;
+        current_tie = &events.back().note;
+        if (*data < 0x80) {
+          events.back().note.key = last_note = read_byte();
+          if (*data < 0x80) {
+            events.back().note.velocity = last_vel = read_byte();
+          }
+          else {
+            events.back().note.velocity = last_vel;
+          }
+        }
+        else {
+          events.back().note.key      = last_note;
+          events.back().note.velocity = last_vel;
+        }
+        // set note length to current tick
+        // to be set to end - start in EOT event
+        events.back().note.length = current_tick;
+        break;
+      }
+      case GbaCmd::EOT: {
+        events.pop_back();
+        if (!current_tie) {
+          Error("End of tie without TIE playing");
+        }
+        current_tie->length = current_tick - current_tie->length;
+        current_tie = nullptr;
+        break;
+      }
       case GbaCmd::MEMACC:
       case GbaCmd::XCMD:
-      case GbaCmd::EOT:
-      case GbaCmd::TIE:
         // todo: tie
         // TIE: start note at TIE command, end at EOT command
       default: {

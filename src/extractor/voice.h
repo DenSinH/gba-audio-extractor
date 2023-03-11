@@ -34,30 +34,47 @@ struct Voice {
 
   virtual ~Voice() = default;
 
+  double GetSample(int midi_key, double dt, double time_since_release) const;
+  virtual void CalculateEnvelope() = 0;
+
+  // we need to pass the midi_key for keysplit channels
+  virtual double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const = 0;
+
+protected:
+  friend struct Keysplit;
   virtual double WaveForm(int midi_key, double dt) const = 0;
-  void CalculateEnvelope();
 
-private:
-
+  double attack_time;
+  double decay_time;
 };
 
 
-struct ProgrammableWave final : public Voice {
+struct DirectSound final : public Voice {
+  std::vector<u8> samples;
+  u32 freq;
+  u32 loop_start;
+
+  void CalculateEnvelope() final;
+  double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const final;
+  double WaveForm(int midi_key, double dt) const final;
+};
+
+
+struct CgbVoice : public Voice {
+  void CalculateEnvelope() final;
+  double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const final;
+};
+
+
+struct ProgrammableWave final : public CgbVoice {
   // always 16 bytes
   std::array<u8, 16> samples{};
 
   double WaveForm(int midi_key, double dt) const final;
 };
 
-struct DirectSound : public Voice {
-  std::vector<u8> samples;
-  u32 freq;
-  u32 loop_start;
 
-  double WaveForm(int midi_key, double dt) const final;
-};
-
-struct Square : public Voice {
+struct Square final : public CgbVoice {
   u8 sweep;
   u8 duty_cycle;
 
@@ -72,11 +89,27 @@ private:
   };
 };
 
-struct Noise : public Voice {
+
+struct Noise final : public CgbVoice {
   u8 period;
 
   double WaveForm(int midi_key, double dt) const final;
 };
+
+
+struct VoiceGroup;
+
+struct Keysplit final : public Voice {
+  std::unique_ptr<VoiceGroup> split;  // nullptr ==> self referential
+  const u8* table;
+
+  void CalculateEnvelope() final { }
+  double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const final;
+  double WaveForm(int midi_key, double dt) const final;
+private:
+  const Voice& GetVoice(int midi_key) const;
+};
+
 
 struct VoiceGroup {
   explicit VoiceGroup(const u8* data) : data{data}, original_data{data} {}
@@ -92,11 +125,3 @@ private:
 
   std::unique_ptr<Voice> ParseNext() const;
 };
-
-struct Keysplit : public Voice {
-  std::unique_ptr<VoiceGroup> split;  // nullptr ==> self referential
-  const u8* table;
-
-  double WaveForm(int midi_key, double dt) const final;
-};
-

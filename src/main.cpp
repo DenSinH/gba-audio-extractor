@@ -14,13 +14,16 @@ int main() {
   file = file_data.data();
 
   // bgmBossTheme
-  u32 start = 14524276;
-  u32 header_offset = 1156;
+//  u32 start = 14524276;
+//  u32 header_offset = 1156;
+  // bgmMinishCap
+  u32 start = 14533836;
+  u32 header_offset = 2652;
 
   auto song   = Song::Extract(util::GetPointer(start + header_offset));
   auto player = Player(&song);
 
-  player.SkipToTick(1280);
+//  player.SkipToTick(2400);
 //  player.SetTrackEnable(0, false);
 //  player.SetTrackEnable(1, false);
 //  player.SetTrackEnable(2, false);

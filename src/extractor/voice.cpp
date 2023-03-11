@@ -8,7 +8,16 @@
 
 #include <cmath>
 
-void Voice::CalculateEnvelope() {
+static constexpr double FrameTime = 1.0 / 59.7275;
+
+
+double Voice::GetSample(int midi_key, double dt, double time_since_release) const {
+  const double wave_sample     = this->WaveForm(midi_key, dt);
+  const double envelope_volume = GetEnvelopeVolume(0, dt, time_since_release);
+  return wave_sample * envelope_volume;
+}
+
+void DirectSound::CalculateEnvelope() {
   // from https://github.com/Kurausukun/pokeemerald/blob/54e55cf040e8ef4b11632a0af14b9f512827d92a/src/sound_mixer.c#L122:
   // MP2K envelope shape
   //                                                                 |
@@ -20,21 +29,49 @@ void Voice::CalculateEnvelope() {
   //    /                           '-.       Echo (linear)          |
   //   /                 Release (exp) ''--..|\                      |
   //  /                                        \                     |
-  static constexpr double FrameTime = 1.0 / 59.7275;
-  const double time_until_attack_finish = attack ? FrameTime * 255.0 / attack : 0;
-  const double time_until_decay_finish  = decay ? FrameTime * 255.0  / attack : 0;
+  if (!attack) {
+    Error("Zero attack on direct sound envelope");
+  }
+  // subtract one since envelope ticks before sound is generated,
+  // and so attack is incremented right away
+  // this makes it so a 255 value of attack gives a zero time until attack finish
+  attack_time = FrameTime * (255.0 / attack - 1);
+
+  // exponential decay with a factor of (decay / 255) per frame
+  if (!decay) {
+    // a decay of zero is instant
+    decay_time = 0;
+  }
+  else if (sustain == 255) {
+    // a maximum sustain volume also gives instant decay
+    decay_time = 0;
+  }
+  else {
+    // we have that volume = 255 * (decay / 255) ^ (time / FrameTime) = sustain
+    const double frames_until_sustain = std::log(sustain / 255.0) / std::log(decay / 255.0);
+    decay_time = frames_until_sustain * FrameTime;
+  }
 }
 
-double ProgrammableWave::WaveForm(int midi_key, double dt) const {
-  // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
-  double freq = CgbMidiKeyToFreq(midi_key, 0);
-
-  int sample_index = (int)(16 * freq * dt) % 32;
-  u8 sample = samples[sample_index >> 1];
-  if (!(sample_index & 1)) {
-    sample = sample >> 4;
+double DirectSound::GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const {
+  if (time_since_release > 0) {
+    return (sustain / 255.0) * std::pow(release / 256.0, time_since_release / FrameTime);
   }
-  return double(sample & 0xf) / 15.0;
+  else {
+    if (dt < attack_time) {
+      return (dt / FrameTime) * attack / 255.0;
+    }
+    else {
+      dt -= attack_time;
+      if (dt < decay_time) {
+        // 255 * this exponential, but we normalize to [0, 1]
+        return std::pow(decay / 256.0, dt / FrameTime);
+      }
+      else {
+        return sustain / 255.0;
+      }
+    }
+  }
 }
 
 double DirectSound::WaveForm(int midi_key, double dt) const {
@@ -52,6 +89,46 @@ double DirectSound::WaveForm(int midi_key, double dt) const {
   }
 
   return double(i8(samples[sampleIndexCourse])) / 256.0;
+}
+
+void CgbVoice::CalculateEnvelope() {
+  // todo: check this
+  attack_time = attack / 64.0;
+  decay_time  = decay  / 64.0;
+}
+
+double CgbVoice::GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const {
+  if (time_since_release > 0) {
+    const double release_time = release / 64.0;
+    return (sustain / 15.0) * std::max((release_time - time_since_release) / release_time, 0.0);
+  }
+  else {
+    if (dt < attack_time) {
+      return dt / attack_time;
+    }
+    else {
+      dt -= attack_time;
+      if (dt < decay_time) {
+        const double fraction = dt / decay_time;
+        return 1.0 * (1 - fraction) + (sustain / 15.0) * fraction;
+      }
+      else {
+        return sustain / 15.0;
+      }
+    }
+  }
+}
+
+double ProgrammableWave::WaveForm(int midi_key, double dt) const {
+  // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
+  double freq = CgbMidiKeyToFreq(midi_key, 0);
+
+  int sample_index = (int)(16 * freq * dt) % 32;
+  u8 sample = samples[sample_index >> 1];
+  if (!(sample_index & 1)) {
+    sample = sample >> 4;
+  }
+  return double(sample & 0xf) / 15.0;
 }
 
 double Square::WaveForm(int midi_key, double dt) const {
@@ -79,26 +156,33 @@ double Noise::WaveForm(int midi_key, double dt) const {
   }
 }
 
-double Keysplit::WaveForm(int midi_key, double dt) const {
-  u8 key = midi_key;
-  const Voice* voice;
+const Voice& Keysplit::GetVoice(int midi_key) const {
   if (table) {
-    voice = &(*split)[table[key]];
+    return (*split)[table[midi_key]];
   }
   else {
-    voice = &(*split)[key];
+    return (*split)[midi_key];
   }
+}
 
-  if (voice->type == Voice::Type::KeysplitAltRhythm || voice->type == Voice::Type::Keysplit) {
+double Keysplit::GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const {
+  return GetVoice(midi_key).GetEnvelopeVolume(midi_key, dt, time_since_release);
+}
+
+double Keysplit::WaveForm(int midi_key, double dt) const {
+  u8 key = midi_key;
+  const Voice& voice = GetVoice(midi_key);
+
+  if (voice.type == Voice::Type::KeysplitAltRhythm || voice.type == Voice::Type::Keysplit) {
     // nested keysplit instruments
     return 0;
   }
   if (type == Voice::Type::KeysplitAltRhythm) {
     // todo: pan
-    key = voice->base;
+    key = voice.base;
   }
 
-  return voice->WaveForm(key, dt);
+  return voice.WaveForm(key, dt);
 }
 
 const Voice& VoiceGroup::operator[](u32 index) const {

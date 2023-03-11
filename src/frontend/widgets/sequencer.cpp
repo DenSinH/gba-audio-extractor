@@ -1,6 +1,7 @@
 #include "sequencer.h"
 #include "extractor/mplaydef.h"
 #include "imgui.h"
+#include "event_tables.h"
 
 
 namespace frontend {
@@ -29,7 +30,7 @@ int Sequencer::GetTimelineItemCount(int index) const {
 }
 
 std::string Sequencer::GetTimelineLabel(int index) const {
-  return "Track " + std::to_string(index);
+  return "Track " + std::to_string(index + 1);
 }
 
 void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int* color) const {
@@ -71,7 +72,18 @@ void Sequencer::Draw() {
   );
 
   if (selected_event) {
-    ImGui::Text("Hi there!");
+    ImGui::Text("Event type: %s", EventNames.at(selected_event->type));
+    if (selected_event->type == Event::Type::Note) {
+      ImGui::Text("Note:     %s", NoteNames.at(selected_event->note.key));
+      ImGui::Text("Duration: %d", selected_event->note.length);
+      ImGui::Text("Velocity: %d", selected_event->note.velocity);
+    }
+    else if (selected_event->type == Event::Type::Controller) {
+      ImGui::Text("Controller: %s", ControllerEventNames.at(selected_event->controller.type));
+    }
+    else if (selected_event->type == Event::Type::VoiceChange) {
+      ImGui::Text("Voice: %d", selected_event->voice_change.voice);
+    }
   }
 
   ImGui::End();

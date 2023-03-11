@@ -28,6 +28,7 @@ private:
   struct PlayingNote {
     double time_started;
     i32 tick_started;
+    double time_released;
     const Note* note;
   };
 
