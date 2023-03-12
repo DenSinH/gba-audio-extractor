@@ -6,8 +6,10 @@
 #include <vector>
 
 struct Song {
-  Song(u8 num_tracks, u8 reverb, const u8* voicegroup_ptr) :
-      tracks{}, reverb{reverb}, voicegroup{voicegroup_ptr} {
+  Song(u8 num_tracks, u8 _reverb, const u8* voicegroup_ptr) :
+      tracks{}, voicegroup{voicegroup_ptr} {
+    reverb    = _reverb & 0x7f;
+    do_reverb = (_reverb & 0x80) != 0;
     tracks.reserve(num_tracks);
   }
 
@@ -17,6 +19,7 @@ struct Song {
 
   // todo: blocks?
   u8 reverb;
+  bool do_reverb;
   VoiceGroup voicegroup;
   std::vector<Track> tracks;
 

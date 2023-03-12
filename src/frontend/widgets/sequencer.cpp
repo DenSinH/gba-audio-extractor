@@ -6,9 +6,10 @@
 
 namespace frontend {
 
-Sequencer::Sequencer(const Player* player) : player{player} {
+Sequencer::Sequencer(Player* player) : player{player} {
   max_frame = 0;
   first_frame = player->GetCurrentTick() - 48;
+  was_paused = player->paused;
   for (const auto& track : player->song->tracks) {
     max_frame = std::max(max_frame, track.length);
   }
@@ -32,6 +33,13 @@ int Sequencer::GetTimelineItemCount(int index) const {
 
 std::string Sequencer::GetTimelineLabel(int index) const {
   return "Track " + std::to_string(index + 1);
+}
+
+unsigned int Sequencer::GetTimelineColor(int timeline) const {
+  if (player->GetTrackEnable(timeline)) {
+    return 0;
+  }
+  return 0xc08080aa;
 }
 
 void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int* color) const {
@@ -62,15 +70,37 @@ void Sequencer::DoubleClick(int timeline, int index) {
   selected_event = &player->song->tracks[timeline].events[index];
 }
 
+void Sequencer::RightClick(int timeline) {
+  player->ToggleTrackEnable(timeline);
+}
+
 void Sequencer::Draw() {
   if (!ImGui::Begin("Sequencer", &show)) {
     ImGui::End();
     return;
   }
-  int current_frame = player->GetCurrentTick();
+  const auto io = ImGui::GetIO();
+  const int player_tick = player->GetCurrentTick();
+  current_tick = player_tick;
   ImSequencer::Sequencer(
-     this, &current_frame, nullptr, &selected, &first_frame
+     this, &current_tick, nullptr, &selected, &first_frame
   );
+
+  if (current_tick != player_tick) {
+    if (!dragging_frame) {
+      // start dragging frame
+      was_paused = player->paused;
+      dragging_frame = true;
+    }
+    player->paused = true;
+  }
+
+  if (dragging_frame && !io.MouseDown[0]) {
+    // stop dragging frame
+    dragging_frame = false;
+    player->SkipToTick(current_tick);
+    player->paused = was_paused;
+  }
 
   if (selected_event) {
     ImGui::Text("Event type: %s", EventNames.at(selected_event->type));

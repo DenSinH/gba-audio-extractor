@@ -18,6 +18,7 @@ struct PanVolume {
 
 struct Player {
   const Song* song;
+  bool paused = false;
 
   explicit Player(const Song* song) : song{song} {
     InitTracks();
@@ -25,7 +26,8 @@ struct Player {
 
   void TickTime(double dt);
   Sample GetSample() const;
-  void SetTrackEnable(i32 track, bool value);
+  void ToggleTrackEnable(i32 track);
+  bool GetTrackEnable(i32 track);
   int GetCurrentTick() const;
   void SkipToTick(i32 tick);
 
@@ -71,6 +73,8 @@ private:
   };
 
   std::vector<TrackStatus> statuses{};
+
+  mutable Sample last_sample = {};
 
   void Reset();
   void InitTracks();

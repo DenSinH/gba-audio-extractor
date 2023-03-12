@@ -269,6 +269,10 @@ namespace ImSequencer
          for (int i = 0; i < timelineCount; i++)
          {
             unsigned int col = (i & 1) ? 0xFF3A3636 : 0xFF413D3D;
+            const unsigned int col_override = sequence->GetTimelineColor(i);
+            if (col_override & 0xff00'0000) {
+              col = col_override;
+            }
 
             size_t localCustomHeight = sequence->GetCustomHeight(i);
             ImVec2 pos = ImVec2(contentMin.x + legendWidth, contentMin.y + ItemHeight * i + 1 + customHeight);
@@ -277,6 +281,9 @@ namespace ImSequencer
             {
                col += 0x80201008;
                pos.x -= legendWidth;
+               if (io.MouseClicked[1]) {
+                 sequence->RightClick(i);
+               }
             }
             draw_list->AddRectFilled(pos, sz, col, 0);
             customHeight += localCustomHeight;

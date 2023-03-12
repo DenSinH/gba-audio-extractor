@@ -25,8 +25,6 @@ static SDL_GLContext gl_context;
 static const char* glsl_version = "#version 130";
 
 Player* gPlayer;
-bool audio_paused = true;
-Sample last_sample = {};
 
 static void TestAudioCallback(void*, u8* stream, int len);
 
@@ -41,20 +39,11 @@ static SDL_AudioSpec audio_spec = {
 static void TestAudioCallback(void*, u8* _stream, int len) {
   float* stream = (float*)_stream;
 
-  if (!audio_paused) {
-    for (int i = 0; i < len / sizeof(float); i += 2) {
-      gPlayer->TickTime(1.0f / audio_spec.freq);
-      const auto sample = gPlayer->GetSample();
-      stream[i]     = 0.2 * sample.left;
-      stream[i + 1] = 0.2 * sample.right;
-      last_sample = sample;
-    }
-  }
-  else {
-    for (int i = 0; i < len / sizeof(float); i += 2) {
-      stream[i]     = 0.2 * last_sample.left;
-      stream[i + 1] = 0.2 * last_sample.right;
-    }
+  for (int i = 0; i < len / sizeof(float); i += 2) {
+    gPlayer->TickTime(1.0f / audio_spec.freq);
+    const auto sample = gPlayer->GetSample();
+    stream[i]     = 0.2 * sample.left;
+    stream[i + 1] = 0.2 * sample.right;
   }
 }
 
@@ -191,7 +180,7 @@ int Run(Player* player) {
     sequencer.Draw();
     if (ImGui::Begin("Controls")) {
       if (ImGui::Button("Pause/Play")) {
-        audio_paused ^= true;
+        player->paused ^= true;
       }
     }
     ImGui::End();

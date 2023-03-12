@@ -11,12 +11,20 @@ static inline double TimePerTick(u32 bpm) {
   return (60.0 / bpm) / 24.0;
 }
 
-void Player::SetTrackEnable(i32 track, bool value) {
+void Player::ToggleTrackEnable(i32 track) {
   if (track >= statuses.size()) {
     Error("Track out of range for song: %d", track);
   }
 
-  statuses[track].enabled = value;
+  statuses[track].enabled ^= true;
+}
+
+bool Player::GetTrackEnable(i32 track) {
+  if (track >= statuses.size()) {
+    Error("Track out of range for song: %d", track);
+  }
+
+  return statuses[track].enabled;
 }
 
 int Player::GetCurrentTick() const {
@@ -54,6 +62,10 @@ void Player::InitTracks() {
 }
 
 void Player::TickTime(double dt) {
+  if (paused) {
+    return;
+  }
+
   global_time += dt;
   fine_time   += dt;
 
@@ -270,6 +282,10 @@ PanVolume Player::TrackStatus::GetPannedVolume(double dt) const {
 }
 
 Sample Player::GetSample() const {
+  if (paused) {
+    return last_sample;
+  }
+
   Sample total = {};
   for (const auto& status : statuses) {
     if (!status.enabled) continue;
@@ -290,5 +306,6 @@ Sample Player::GetSample() const {
     total.right += superposition.right;
   }
 
+  last_sample = total;
   return total;
 }

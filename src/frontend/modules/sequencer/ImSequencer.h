@@ -51,8 +51,6 @@ namespace ImSequencer
       virtual int GetTimelineCount() const = 0;
       virtual int GetTimelineItemCount(int index) const = 0;
 
-      virtual void BeginEdit(int /*index*/) {}
-      virtual void EndEdit() {}
       virtual std::string GetTimelineLabel(int /*index*/) const { return ""; }
       virtual const char* GetCollapseFmt() const { return "%d Frames / %d timelines"; }
 
@@ -60,6 +58,8 @@ namespace ImSequencer
 
       virtual size_t GetCustomHeight(int timeline) { return 0; }
       virtual void DoubleClick(int timeline, int index) {}
+      virtual void RightClick(int timeline) { }
+      virtual unsigned int GetTimelineColor(int timeline) const { return 0; }
       virtual void CustomDraw(int /*index*/, ImDrawList* /*draw_list*/, const ImRect& /*rc*/, const ImRect& /*legendRect*/, const ImRect& /*clippingRect*/, const ImRect& /*legendClippingRect*/) {}
       virtual void CustomDrawCompact(int /*index*/, ImDrawList* /*draw_list*/, const ImRect& /*rc*/, const ImRect& /*clippingRect*/) {}
 

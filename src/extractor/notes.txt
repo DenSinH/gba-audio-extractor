@@ -259,3 +259,6 @@ Example bgmMinishCap track 5 measure 12, (about 900 ticks)
 NOTE: Keyshift might change within a note, but agb2mid doesn't account
       for that either
       It does create separate events for bend
+
+
+ TIEs may occur in patterns, see track 1 of bgmCloudTops in tmc
