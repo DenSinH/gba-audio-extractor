@@ -21,7 +21,6 @@ void Track::Parse(const u8* data) {
   i32 last_note     = -1;
   i32 last_vel      = -1;
   i32 current_tick  = 0;
-  Note* current_tie = nullptr;
 
   const auto read_byte = [&](bool branchable = false) {
     branch_targets.emplace_back(branchable ? events.size() : -1);
@@ -54,7 +53,7 @@ void Track::Parse(const u8* data) {
       }
     }
 
-    // Debug("Parsing %02x command", cmd);
+    Debug("Parsing %02x command", cmd);
     events.push_back(Event{
       // initialize as meta event (ignored)
       Event::Type::Meta,
@@ -77,21 +76,14 @@ void Track::Parse(const u8* data) {
         break;
       }
       case GbaCmd::FINE: {
-        if (current_tie) {
-          Error("Unended TIE at FINE command");
-        }
         events.back().type = Event::Type::Fine;
 
-        // filter out null events and PEND events
-        events = util::filter(events, [](const auto& e){ return e.type != Event::Type::Meta; });
         length = current_tick;
+        PostProcess();
         Debug("Track end, found %d commands", events.size());
         return;
       }
       case GbaCmd::GOTO: {
-        if (current_tie) {
-          Error("Unended TIE at GOTO command");
-        }
         events.back().type = Event::Type::Goto;
         const auto dest = util::GetPointer(read_word());
         const auto diff = dest - track_start;
@@ -197,36 +189,34 @@ void Track::Parse(const u8* data) {
         break;
       }
       case GbaCmd::TIE: {
-        if (current_tie) {
-          Error("Interleaved TIE in track");
-        }
-        events.back().type = Event::Type::Note;
-        current_tie = &events.back().note;
+        events.back().meta.type = Meta::Type::Tie;
+
         if (*data < 0x80) {
-          events.back().note.key = last_note = read_byte();
+          events.back().meta.tie.note.key = last_note = read_byte();
           if (*data < 0x80) {
-            events.back().note.velocity = last_vel = read_byte();
+            events.back().meta.tie.note.velocity = last_vel = read_byte();
           }
           else {
-            events.back().note.velocity = last_vel;
+            events.back().meta.tie.note.velocity = last_vel;
           }
         }
         else {
-          events.back().note.key      = last_note;
-          events.back().note.velocity = last_vel;
+          events.back().meta.tie.note.key      = last_note;
+          events.back().meta.tie.note.velocity = last_vel;
         }
         // set note length to current tick
         // to be set to end - start in EOT event
-        events.back().note.length = current_tick;
+        events.back().meta.tie.note.length = current_tick;
         break;
       }
       case GbaCmd::EOT: {
-        events.pop_back();
-        if (!current_tie) {
-          Error("End of tie without TIE playing");
+        events.back().meta.type = Meta::Type::Eot;
+
+        i32 key = -1;
+        if (*data < 0x80) {
+          key = read_byte();
         }
-        current_tie->length = current_tick - current_tie->length;
-        current_tie = nullptr;
+        events.back().meta.eot.key = key;
         break;
       }
       case GbaCmd::MEMACC:
@@ -238,4 +228,64 @@ void Track::Parse(const u8* data) {
       }
     }
   }
+}
+
+void Track::PostProcess() {
+  // filter out meta events and fix TIEs
+  std::vector<Event> processed{};
+  Event* current_tie = nullptr;
+
+  for (auto& event : events) {
+    if (event.type == Event::Type::Meta) {
+      // meta events may need to be handled differently
+      switch (event.meta.type) {
+        case Meta::Type::Tie: {
+          if (current_tie) {
+            Error("Double tie in track");
+          }
+
+          // save the tie, convert to note at EOT
+          processed.push_back(event);
+          current_tie = &processed.back();
+          break;
+        }
+        case Meta::Type::Eot: {
+          if (!current_tie) {
+            Error("End of tie without active tie");
+          }
+          if (event.meta.eot.key > 0 && (current_tie->meta.tie.note.key != event.meta.eot.key)) {
+            Error(
+                "End tie of different note, got %d, expected %d",
+                current_tie->meta.tie.note.key, event.meta.eot.key
+            );
+          }
+
+          auto note = current_tie->meta.tie.note;
+          // note length is difference between EOT and TIE
+          note.length = event.tick - current_tie->tick;
+
+          // change TIE event to note
+          current_tie->type = Event::Type::Note;
+          current_tie->note = note;
+          current_tie = nullptr;
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+    }
+    else {
+      // just copy over normal events
+      if ((event.type == Event::Type::Goto) && current_tie) {
+        Error("Active tie during GOTO command");
+      }
+      processed.push_back(event);
+    }
+  }
+
+  if (current_tie) {
+    Error("Active tie at FINE");
+  }
+  events = std::move(processed);
 }

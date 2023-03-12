@@ -17,8 +17,11 @@ int main() {
 //  u32 start = 14524276;
 //  u32 header_offset = 1156;
   // bgmMinishCap
-  u32 start = 14533836;
-  u32 header_offset = 2652;
+//  u32 start = 14533836;
+//  u32 header_offset = 2652;
+  // bgmCloudTops
+  u32 start = 14506168;
+  u32 header_offset = 3140;
 
   auto song   = Song::Extract(util::GetPointer(start + header_offset));
   auto player = Player(&song);

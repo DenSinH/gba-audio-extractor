@@ -12,4 +12,7 @@ struct Track {
   Track(const u8* data);
 
   void Parse(const u8* data);
+
+private:
+  void PostProcess();
 };

@@ -47,12 +47,16 @@ struct Fine {
 struct Meta {
   enum class Type {
     Wait,
+    Tie,
+    Eot,
     Pend,
-    Keyshift,
   };
 
   Type type;
-  i32 keyshift;
+  union {
+    struct { Note note; } tie;
+    struct { i32 key; } eot;
+  };
 };
 
 struct Event {
