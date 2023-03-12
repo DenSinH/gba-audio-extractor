@@ -8,6 +8,7 @@ namespace frontend {
 
 Sequencer::Sequencer(const Player* player) : player{player} {
   max_frame = 0;
+  first_frame = player->GetCurrentTick() - 48;
   for (const auto& track : player->song->tracks) {
     max_frame = std::max(max_frame, track.length);
   }

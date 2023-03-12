@@ -3,4 +3,4 @@ file(GLOB EXTRACTOR_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
 
 add_library(Extractor STATIC
         ${EXTRACTOR_SOURCES}
-        ${EXTRACTOR_HEADERS})
+        ${EXTRACTOR_HEADERS} constants.h)

@@ -18,6 +18,7 @@ struct VoiceChange {
 
 struct Controller {
   enum class Type {
+    KEYSH = GbaCmd::KEYSH,
     VOL   = GbaCmd::VOL,
     PAN   = GbaCmd::PAN,
     BEND  = GbaCmd::BEND,
@@ -30,7 +31,7 @@ struct Controller {
   };
 
   Type type;
-  i32 vol;
+  i32 val;
 };
 
 struct Note {

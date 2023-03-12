@@ -5,16 +5,36 @@
 
 #include "midi.h"
 #include "noise.h"
+#include "constants.h"
 
 #include <cmath>
 
-static constexpr double FrameTime = 1.0 / 59.7275;
 
+void VoiceState::Tick(i32 midi_key, double pitch_adjust, double dt) {
+  if (base_key >= 0) {
+    // keep fine adjust
+    midi_key = base_key;
+  }
 
-double Voice::GetSample(int midi_key, double dt, double time_since_release) const {
-  const double wave_sample     = this->WaveForm(midi_key, dt);
-  const double envelope_volume = GetEnvelopeVolume(0, dt, time_since_release);
+  const double freq = voice->GetFrequency(midi_key + pitch_adjust);
+  integrated_time += dt * freq;
+  actual_time     += dt;
+}
+
+double VoiceState::GetSample(double time_since_release) const {
+  const double wave_sample     = voice->WaveForm(integrated_time);
+  const double envelope_volume = voice->GetEnvelopeVolume(actual_time, time_since_release);
   return wave_sample * envelope_volume;
+}
+
+double VoiceState::GetEnvelopeVolume(double time_since_start, double time_since_release) {
+  return voice->GetEnvelopeVolume(time_since_start, time_since_release);
+}
+
+// in general, we don't need the base_key for the voice state
+// so we set it to -1
+VoiceState Voice::GetState([[maybe_unused]] i32 base_key) const {
+  return VoiceState(this, -1);
 }
 
 void DirectSound::CalculateEnvelope() {
@@ -53,19 +73,19 @@ void DirectSound::CalculateEnvelope() {
   }
 }
 
-double DirectSound::GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const {
+double DirectSound::GetEnvelopeVolume(double time_since_start, double time_since_release) const {
   if (time_since_release > 0) {
     return (sustain / 255.0) * std::pow(release / 256.0, time_since_release / FrameTime);
   }
   else {
-    if (dt < attack_time) {
-      return (dt / FrameTime) * attack / 255.0;
+    if (time_since_start < attack_time) {
+      return (time_since_start * FrameFreq) * attack / 255.0;
     }
     else {
-      dt -= attack_time;
-      if (dt < decay_time) {
+      time_since_start -= attack_time;
+      if (time_since_start < decay_time) {
         // 255 * this exponential, but we normalize to [0, 1]
-        return std::pow(decay / 256.0, dt / FrameTime);
+        return std::pow(decay / 256.0, time_since_start * FrameFreq);
       }
       else {
         return sustain / 255.0;
@@ -74,16 +94,16 @@ double DirectSound::GetEnvelopeVolume(int midi_key, double dt, double time_since
   }
 }
 
-double DirectSound::WaveForm(int midi_key, double dt) const {
-  // compute channel frequency at which samples are requested
-  const double chanFreq = MidiKeyToFreq(freq, midi_key, 0);
+double DirectSound::GetFrequency(double midi_key) const {
+  return MidiKeyToFreq(freq, midi_key);
+}
 
+double DirectSound::WaveForm(double integrated_time) const {
   // so if time is dt, we are at sample
-  const double sampleIndex = dt * chanFreq;
-  u32 sampleIndexCourse = u32(sampleIndex);
+  u32 sampleIndexCourse = u32(integrated_time);
 
   // todo: interpolation with:
-  const double sampleIndexFine = sampleIndex - sampleIndexCourse;
+  const double sampleIndexFine = integrated_time - sampleIndexCourse;
   if (sampleIndexCourse > samples.size()) {
     sampleIndexCourse = loop_start + (sampleIndexCourse % (samples.size() - loop_start));
   }
@@ -97,19 +117,19 @@ void CgbVoice::CalculateEnvelope() {
   decay_time  = decay  / 64.0;
 }
 
-double CgbVoice::GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const {
+double CgbVoice::GetEnvelopeVolume(double time_since_start, double time_since_release) const {
   if (time_since_release > 0) {
     const double release_time = release / 64.0;
     return (sustain / 15.0) * std::max((release_time - time_since_release) / release_time, 0.0);
   }
   else {
-    if (dt < attack_time) {
-      return dt / attack_time;
+    if (time_since_start < attack_time) {
+      return time_since_start / attack_time;
     }
     else {
-      dt -= attack_time;
-      if (dt < decay_time) {
-        const double fraction = dt / decay_time;
+      time_since_start -= attack_time;
+      if (time_since_start < decay_time) {
+        const double fraction = time_since_start / decay_time;
         return 1.0 * (1 - fraction) + (sustain / 15.0) * fraction;
       }
       else {
@@ -119,11 +139,13 @@ double CgbVoice::GetEnvelopeVolume(int midi_key, double dt, double time_since_re
   }
 }
 
-double ProgrammableWave::WaveForm(int midi_key, double dt) const {
-  // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
-  double freq = CgbMidiKeyToFreq(midi_key, 0);
+double CgbVoice::GetFrequency(double midi_key) const {
+  return CgbMidiKeyToFreq(midi_key);
+}
 
-  int sample_index = (int)(16 * freq * dt) % 32;
+double ProgrammableWave::WaveForm(double integrated_time) const {
+// sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
+  int sample_index = (int)(16 * integrated_time) % 32;
   u8 sample = samples[sample_index >> 1];
   if (!(sample_index & 1)) {
     sample = sample >> 4;
@@ -131,25 +153,27 @@ double ProgrammableWave::WaveForm(int midi_key, double dt) const {
   return double(sample & 0xf) / 15.0;
 }
 
-double Square::WaveForm(int midi_key, double dt) const {
-  double freq = CgbMidiKeyToFreq(midi_key, 0);
-  double in_period = (freq * dt) - std::floor(freq * dt);
+double Square::WaveForm(double integrated_time) const {
+  double in_period = integrated_time - std::floor(integrated_time);
 
   return (DutyCycle[duty_cycle] & (0x80 >> u32(in_period * 8))) ? -0.5 : 0.5;
 }
 
-double Noise::WaveForm(int midi_key, double dt) const {
-  const double time = dt * NoiseFreqTable[midi_key];
+double Noise::GetFrequency(double midi_key) const {
+  return NoiseFreqTable[(i32)midi_key];
+}
+
+double Noise::WaveForm(double integrated_time) const {
   if (period) {
     // 7 bits
-    const u32 index = (u32)time % (8 * NoiseSequence7.size());
+    const u32 index = (u32)integrated_time % (8 * NoiseSequence7.size());
     const u8  sample_set = NoiseSequence7[index / 8];
     const u32 sample_index = index % 8;
     return (sample_set & (0x80 >> sample_index)) ? -0.5 : 0.5;
   }
   else {
     // 15 bits
-    const u32 index = (u32)time % (8 * NoiseSequence15.size());
+    const u32 index = (u32)integrated_time % (8 * NoiseSequence15.size());
     const u8  sample_set = NoiseSequence15[index / 8];
     const u32 sample_index = index % 8;
     return (sample_set & (0x80 >> sample_index)) ? -0.5 : 0.5;
@@ -165,24 +189,28 @@ const Voice& Keysplit::GetVoice(int midi_key) const {
   }
 }
 
-double Keysplit::GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const {
-  return GetVoice(midi_key).GetEnvelopeVolume(midi_key, dt, time_since_release);
+double Keysplit::GetEnvelopeVolume(double time_since_start, double time_since_release) const {
+  Error("Attempted to get envelope volume of keysplit voice");
 }
 
-double Keysplit::WaveForm(int midi_key, double dt) const {
-  u8 key = midi_key;
-  const Voice& voice = GetVoice(midi_key);
+double Keysplit::GetFrequency(double midi_key) const {
+  Error("Attempted to get frequency of keysplit voice");
+}
 
-  if (voice.type == Voice::Type::KeysplitAltRhythm || voice.type == Voice::Type::Keysplit) {
-    // nested keysplit instruments
-    return 0;
-  }
+double Keysplit::WaveForm(double integrated_time) const {
+  // todo: forced pan in Keysplit voice
+  Error("Attempted to get waveform of keysplit voice");
+}
+
+VoiceState Keysplit::GetState(i32 midi_key) const {
+  const auto& voice = GetVoice(midi_key);
+
+  i32 key = midi_key;
   if (type == Voice::Type::KeysplitAltRhythm) {
     // todo: pan
     key = voice.base;
   }
-
-  return voice.WaveForm(key, dt);
+  return voice.GetState(key);
 }
 
 const Voice& VoiceGroup::operator[](u32 index) const {

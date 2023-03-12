@@ -141,3 +141,121 @@ echo: linear (-1) starting from echovolume, set by XIECV command
 
 Example: bgmMinishCap, voice group 51,
          voice 0 in measure 33, track 5 (about 2400 ticks)
+
+
+MOD/LFO/BEND:
+bendRange initialized to 2
+
+bend: set bend
+bendr: set bend range
+
+pitX, keyshiftX only set from outside the song data.
+These are constants, and I will probably ignore them
+
+ply_lfos: set lfo speed, ClearModM if 0 ()
+ply_lfodl: set lfo delay, ClearModM when note starts ()
+ply_mod: set mod, ClearModM if 0 ()
+ply_modt: set mod type
+
+ClearModM: set lfoSpeedC to 0, modM to 0, [flags depending on mod type]
+
+mod type:
+	.equ	mod_vib,0		@ vibrate
+	.equ	mod_tre,1		@ tremolo
+	.equ	mod_pan,2		@ auto-panpot
+2 seems unused?
+
+LFO: speed initialized to 22
+     counter set to delay
+     counter decremented every frame until 0
+     when 0 (every frame):
+        increment LFOSpeedC with LFOSpeed
+        set modM to some calculation with MOD and LFOSpeedC
+
+        if modT is 0 (default):
+            s32 bend = track->bend * track->bendRange;
+            s32 x = (track->tune + bend) * 4
+                  + (track->keyShift << 8)
+                  + (track->keyShiftX << 8)
+                  + track->pitX;
+
+            if (track->modT == 0) x += 16 * track->modM;
+
+            track->keyM = x >> 8;
+            track->pitM = (u8)x;
+        else:
+            s32 x;
+            s32 y;
+
+            x = (u32)(track->vol * track->volX) >> 5;
+            if (track->modT == 1) x = (u32)(x * (track->modM + 128)) >> 7;
+            y = 2 * track->pan + track->panX;
+            if (track->modT == 2) y += track->modM;
+
+            if (y < -128) y = -128;
+            else if (y > 127) y = 127;
+
+            track->volMR = (u32)((y + 128) * x) >> 8;
+            track->volML = (u32)((127 - y) * x) >> 8;
+
+
+Calculation for modM:
+if (currentTrack->lfoSpeedC >= 0x40U && currentTrack->lfoSpeedC < 0xC0U) {
+  r = 128 - currentTrack->lfoSpeedC;
+} else if (currentTrack->lfoSpeedC >= 0xC0U) {
+  // Unsigned -> signed casts where the value is out of range are implementation defined.
+  // Why not add a few extra lines to make behavior the same for literally everyone?
+  r = currentTrack->lfoSpeedC - 256;
+} else {
+  r = currentTrack->lfoSpeedC;
+}
+/* r graph over time:
+ *  0x40
+ *  /\
+ * /  \
+ *     \  /
+ *      \/
+ *     -0x40
+ * always linear with lfoSpeed / Frame
+ */
+r = FLOOR_DIV_POW2(currentTrack->mod * r, 64); // just division by 64
+
+if (r != currentTrack->modM) {
+  currentTrack->modM = r;
+
+  // set to update state later in TrkVolPitSet
+  if (currentTrack->modT == 0) {
+    currentTrack->flags |= MPT_FLG_PITCHG;
+  } else {
+    currentTrack->flags |= MPT_FLG_VOLCHG;
+  }
+}
+
+
+We get the following formulas, with values set by control events in capital letters:
+    triangle(t) = 4|(t + 0.25) - floor((t + 0.5) + 0.5)| - 1    ~~> triangle wave, 0 -> 1 -> -1 -> 0
+
+        (assuming t = 0 is the end of LFODELAY = track->lfoDelay * FrameTime)
+    r(t) = 64 * triangle((LFOSPEED / 256) * (t / FrameTime))
+
+    modM = floor(MOD * r(t) / 64)
+        ~~> We don't need to do the flooring for extra precision
+
+    bendX(t)    = (1 / 256) * 4 * (TUNE + BEND * BENDRANGE) + (MODT == 0) * 16 * (modM(t))
+
+        This includes cents:
+    keyshift(t) = KEYSHIFT + bendX(t) / 256
+
+    volX(t) = VOL ::: if modT == 1 ::: * (modM(t) + 128) / 128
+    volY(t) = std::clamp(2 * PAN  ::: if modT == 2 ::: + modM(t), -128, 127)
+
+    volR(t) = (volY(t) + 128) * volX(t) / 256
+    volL(t) = (127 - volY(t)) * volX(t) / 256
+
+https://youtu.be/-K8PFpFhx8Y?list=PL66C3A99730C3F3F2&t=26
+Example bgmMinishCap track 5 measure 12, (about 900 ticks)
+
+
+NOTE: Keyshift might change within a note, but agb2mid doesn't account
+      for that either
+      It does create separate events for bend

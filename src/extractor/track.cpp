@@ -17,7 +17,6 @@ void Track::Parse(const u8* data) {
   // branch_target[offset from track_start] = index into events
   std::vector<i32> branch_targets{};
 
-  i32 keyshift      = 0;
   i32 last_cmd      = -1;
   i32 last_note     = -1;
   i32 last_vel      = -1;
@@ -113,7 +112,6 @@ void Track::Parse(const u8* data) {
         }
 
         const i32 patt_start_tick  = events[branch_targets[diff]].tick;
-        const i32 patt_start_keysh = keyshift;
         // Debug("Pattern start tick %d", patt_start_tick);
         events.pop_back();  // no PATT event, unpack pattern right away
 
@@ -129,14 +127,6 @@ void Track::Parse(const u8* data) {
           // displace tick from pattern_start_tick to current_tick
           event.tick = event.tick - patt_start_tick + current_tick;
 
-          // use current keyshift
-          if (event.type == Event::Type::Note) {
-            event.note.key = event.note.key - patt_start_keysh + keyshift;
-          }
-          else if (event.type == Event::Type::Meta && event.meta.type == Meta::Type::Keyshift) {
-            // set keyshift to value in null event
-            keyshift = event.meta.keyshift;
-          }
           events.push_back(event);
         }
 
@@ -157,14 +147,6 @@ void Track::Parse(const u8* data) {
         events.back().tempo = Tempo{2 * read_byte()};
         break;
       }
-      case GbaCmd::KEYSH: {
-        keyshift = read_byte();
-        // add keyshift to null event at the back so that it is handled
-        // properly in patterns
-        events.back().meta.type = Meta::Type::Keyshift;
-        events.back().meta.keyshift = keyshift;
-        break;
-      }
       case GbaCmd::VOICE: {
         events.back().type = Event::Type::VoiceChange;
         events.back().voice_change = VoiceChange{read_byte()};
@@ -178,6 +160,7 @@ void Track::Parse(const u8* data) {
       case GbaCmd::LFODL:
       case GbaCmd::MOD:
       case GbaCmd::MODT:
+      case GbaCmd::KEYSH:
       case GbaCmd::TUNE: {
         events.back().type = Event::Type::Controller;
         // VOL * 127 / 128 in agb.cpp
@@ -208,7 +191,7 @@ void Track::Parse(const u8* data) {
 
         events.back().note = {
             length,
-            note + keyshift,
+            note,
             vel,
         };
         break;

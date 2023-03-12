@@ -1,5 +1,9 @@
 #include "player.h"
 #include "error.h"
+#include "constants.h"
+
+#include <cmath>
+#include <algorithm>
 
 
 static inline double TimePerTick(u32 bpm) {
@@ -41,7 +45,7 @@ void Player::InitTracks() {
   for (const auto& track : song->tracks) {
     statuses.emplace_back();
     statuses.back().current_event = track.events.data();
-    HandleEvents(track, statuses.back());
+    TickEvents(track, statuses.back());
   }
 
   if (time_per_tick == 0) {
@@ -53,6 +57,17 @@ void Player::TickTime(double dt) {
   global_time += dt;
   fine_time   += dt;
 
+  for (auto& status : statuses) {
+    for (auto& note : status.current_notes) {
+      const double pitch_adjust = status.GetPitchAdjust(global_time - note.time_started);
+      const i32 keyshift        = std::floor(pitch_adjust);
+      const double fine_adjust  = pitch_adjust - keyshift;
+      const i32 key             = note.note->key + keyshift;
+
+      note.voice.Tick(key, fine_adjust, dt);
+    }
+  }
+  
   // this while is excessive, but may theoretically be
   // needed
   while (fine_time > time_per_tick) {
@@ -68,7 +83,7 @@ void Player::TickTracks() {
   }
 }
 
-void Player::HandleEvents(const Track& track, TrackStatus& status) {
+void Player::TickEvents(const Track& track, TrackStatus& status) {
   while (status.current_event->tick <= status.tick) {
     const auto& event = *status.current_event;
 
@@ -106,18 +121,43 @@ void Player::HandleEvents(const Track& track, TrackStatus& status) {
       case Event::Type::Controller: {
         switch (event.controller.type) {
           case Controller::Type::VOL: {
-            status.volume = event.controller.vol / 127.0;
+            status.vol = event.controller.val / 127.0;
             break;
           }
-          case Controller::Type::PAN:
-          case Controller::Type::BEND:
-          case Controller::Type::BENDR:
-          case Controller::Type::LFOS:
-          case Controller::Type::LFODL:
-          case Controller::Type::MOD:
-          case Controller::Type::MODT:
-          case Controller::Type::TUNE: {
-//            Error("Unimplemented controller event: %02x", static_cast<u8>(event.controller.type));
+          case Controller::Type::KEYSH: {
+            status.keyshift = static_cast<i8>(event.controller.val);
+            break;
+          }
+          case Controller::Type::PAN: {
+            status.pan = static_cast<i8>(event.controller.val) - 0x40;
+            break;
+          }
+          case Controller::Type::BEND: {
+            status.bend = static_cast<i8>(event.controller.val) - 0x40;
+            break;
+          }
+          case Controller::Type::BENDR:{
+            status.bend_range = event.controller.val;
+            break;
+          }
+          case Controller::Type::LFOS: {
+            status.lfo_speed = event.controller.val;
+            break;
+          }
+          case Controller::Type::LFODL: {
+            status.lfo_delay = event.controller.val;
+            break;
+          }
+          case Controller::Type::MOD: {
+            status.mod = event.controller.val;
+            break;
+          }
+          case Controller::Type::MODT: {
+            status.modt = event.controller.val;
+            break;
+          }
+          case Controller::Type::TUNE:  {
+            status.tune = static_cast<i8>(event.controller.val) - 0x40;
             break;
           }
         }
@@ -128,7 +168,8 @@ void Player::HandleEvents(const Track& track, TrackStatus& status) {
             global_time - fine_time,
             event.tick,
             std::numeric_limits<double>::infinity(),
-            &event.note
+            &event.note,
+            status.voice->GetState(event.note.key)
         });
         break;
       }
@@ -140,7 +181,7 @@ void Player::HandleEvents(const Track& track, TrackStatus& status) {
   }
 }
 
-void Player::HandleNotes(const Track& track, TrackStatus& status) {
+void Player::TickNotes(const Track& track, TrackStatus& status) {
   if (status.current_notes.empty()) {
     return;
   }
@@ -164,8 +205,7 @@ void Player::HandleNotes(const Track& track, TrackStatus& status) {
     }
     else if (note_end < status.tick) {
       // released note
-      const double echoVol = status.voice->GetEnvelopeVolume(
-          0,
+      const double echoVol = note->voice.GetEnvelopeVolume(
           global_time - note->time_started,
           global_time - note->time_released
       );
@@ -188,29 +228,67 @@ void Player::TickTrack(const Track& track, TrackStatus& status) {
     return;
   }
 
-  HandleEvents(track, status);
-  HandleNotes(track, status);
+  TickEvents(track, status);
+  TickNotes(track, status);
+}
+
+double Player::TrackStatus::modM(double dt) const {
+  if (!mod || !lfo_speed) {
+    return 0;
+  }
+  if (lfo_delay && dt < lfo_delay * FrameTime) {
+    return 0;
+  }
+  dt -= lfo_delay * FrameTime;
+  return mod * std::sin(2 * 3.141592 * (lfo_speed / 256.0) * dt * FrameFreq);
+}
+
+double Player::TrackStatus::GetPitchAdjust(double dt) const {
+  double adjust = 4 * (tune + bend * bend_range);
+  if (modt == 0) {
+    adjust += 16 * modM(dt);
+  }
+  return keyshift + (adjust / 256.0);
+}
+
+PanVolume Player::TrackStatus::GetPannedVolume(double dt) const {
+  double main_vol = vol;
+  if (modt == 1) {
+    main_vol *= (modM(dt) + 128.0) / 128.0;
+  }
+
+  double pan_vol = 2 * pan;
+  if (modt == 2) {
+    pan_vol += modM(dt);
+  }
+  pan_vol = std::clamp(pan_vol, -128.0, 127.0);
+  
+  return {
+      .left  = (127.0 - pan_vol) * main_vol / 256.0,
+      .right = (pan_vol + 128.0) * main_vol / 256.0,
+  };
 }
 
 Sample Player::GetSample() const {
-  double total = 0;
+  Sample total = {};
   for (const auto& status : statuses) {
     if (!status.enabled) continue;
 
-    double superposition = 0;
+    Sample superposition = {};
     for (const auto& note : status.current_notes) {
-      const auto key                  = note.note->key;
-      const double dt                 = global_time - note.time_started;
+      const double time_since_started = global_time - note.time_started;
       const double time_since_release = global_time - note.time_released;
 
-      const double amp = status.voice->GetSample(key, dt, time_since_release);
-      superposition += amp * note.note->velocity / 128.0;
+      const double amp     = note.voice.GetSample(time_since_release);
+      const double vel_amp = amp * note.note->velocity / 128.0;
+      const auto pan_vol   = status.GetPannedVolume(time_since_started);
+
+      superposition.left  += vel_amp * pan_vol.left;
+      superposition.right += vel_amp * pan_vol.right;
     }
-    total += superposition * status.volume;
+    total.left  += superposition.left;
+    total.right += superposition.right;
   }
 
-  return Sample{
-      (float)total,
-      (float)total
-  };
+  return total;
 }

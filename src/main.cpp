@@ -23,7 +23,7 @@ int main() {
   auto song   = Song::Extract(util::GetPointer(start + header_offset));
   auto player = Player(&song);
 
-//  player.SkipToTick(2400);
+//  player.SkipToTick(900);
 //  player.SetTrackEnable(0, false);
 //  player.SetTrackEnable(1, false);
 //  player.SetTrackEnable(2, false);

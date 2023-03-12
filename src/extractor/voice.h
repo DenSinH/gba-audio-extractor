@@ -7,6 +7,30 @@
 #include <memory>
 
 
+struct Voice;
+
+struct VoiceState {
+  explicit VoiceState(const Voice* voice, i32 base_key) :
+      voice{voice}, base_key{base_key} {
+
+  }
+
+  double GetEnvelopeVolume(double time_since_start, double time_since_release);
+  void Tick(i32 midi_key, double pitch_adjust, double dt);
+  double GetSample(double time_since_release) const;
+
+private:
+  const Voice* voice = nullptr;
+
+  // keysplit based voices have a base key to override the given key
+  i32 base_key = -1;
+
+  // for envelope progression:
+  double actual_time = 0;
+  // for wave progression:
+  double integrated_time = 0;
+};
+
 struct Voice {
   enum Type : u8 {
     DirectSound = 0,
@@ -34,15 +58,26 @@ struct Voice {
 
   virtual ~Voice() = default;
 
-  double GetSample(int midi_key, double dt, double time_since_release) const;
-  virtual void CalculateEnvelope() = 0;
-
-  // we need to pass the midi_key for keysplit channels
-  virtual double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const = 0;
+  virtual VoiceState GetState(i32 midi_key) const;
 
 protected:
   friend struct Keysplit;
-  virtual double WaveForm(int midi_key, double dt) const = 0;
+  friend struct VoiceState;
+  friend struct VoiceGroup;
+
+  // get frequency given a midi key (pitch adjusted)
+  virtual double GetFrequency(double midi_key) const = 0;
+
+  // waveform based on "integrated time"
+  // i.e. time corrected for frequency fluctuations
+  virtual double WaveForm(double integrated_time) const = 0;
+
+  // get envelope volume based on time since note start and
+  // time since note end
+  virtual double GetEnvelopeVolume(double time_since_start, double time_since_release) const = 0;
+
+  // calculate envelope timings only once when created
+  virtual void CalculateEnvelope() = 0;
 
   double attack_time;
   double decay_time;
@@ -54,15 +89,19 @@ struct DirectSound final : public Voice {
   u32 freq;
   u32 loop_start;
 
+  double GetFrequency(double midi_key) const final;
+  double WaveForm(double integrated_time) const final;
+  double GetEnvelopeVolume(double dt, double time_since_release) const final;
+
   void CalculateEnvelope() final;
-  double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const final;
-  double WaveForm(int midi_key, double dt) const final;
 };
 
 
 struct CgbVoice : public Voice {
+  double GetFrequency(double midi_key) const;
+  double GetEnvelopeVolume(double dt, double time_since_release) const final;
+
   void CalculateEnvelope() final;
-  double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const final;
 };
 
 
@@ -70,7 +109,7 @@ struct ProgrammableWave final : public CgbVoice {
   // always 16 bytes
   std::array<u8, 16> samples{};
 
-  double WaveForm(int midi_key, double dt) const final;
+  double WaveForm(double integrated_time) const final;
 };
 
 
@@ -78,7 +117,7 @@ struct Square final : public CgbVoice {
   u8 sweep;
   u8 duty_cycle;
 
-  double WaveForm(int midi_key, double dt) const final;
+  double WaveForm(double integrated_time) const final;
 
 private:
   static constexpr std::array<u8, 4> DutyCycle {
@@ -93,7 +132,9 @@ private:
 struct Noise final : public CgbVoice {
   u8 period;
 
-  double WaveForm(int midi_key, double dt) const final;
+  // noise frequency is special
+  double GetFrequency(double midi_key) const final;
+  double WaveForm(double integrated_time) const final;
 };
 
 
@@ -103,9 +144,20 @@ struct Keysplit final : public Voice {
   std::unique_ptr<VoiceGroup> split;  // nullptr ==> self referential
   const u8* table;
 
+  // get state for nested voice
+  VoiceState GetState(i32 midi_key) const final;
+
+  // these will all raise an error, since
+  // there is no waveform / envelope for a keysplit voice
+  // as it is not an actual voice
+  double GetFrequency(double midi_key) const final;
+  double WaveForm(double integrated_time) const final;
+  double GetEnvelopeVolume(double dt, double time_since_release) const final;
+
+  // there is no envelope volume for a keysplit voice
+  // as it is not an actual voice
   void CalculateEnvelope() final { }
-  double GetEnvelopeVolume(int midi_key, double dt, double time_since_release) const final;
-  double WaveForm(int midi_key, double dt) const final;
+
 private:
   const Voice& GetVoice(int midi_key) const;
 };
