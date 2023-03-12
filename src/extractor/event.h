@@ -31,7 +31,7 @@ struct Controller {
   };
 
   Type type;
-  i32 val;
+  u8 val;
 };
 
 struct Note {

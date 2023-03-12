@@ -16,7 +16,7 @@ void Player::ToggleTrackEnable(i32 track) {
     Error("Track out of range for song: %d", track);
   }
 
-  statuses[track].enabled ^= true;
+  statuses[track].external.enabled ^= true;
 }
 
 bool Player::GetTrackEnable(i32 track) {
@@ -24,7 +24,7 @@ bool Player::GetTrackEnable(i32 track) {
     Error("Track out of range for song: %d", track);
   }
 
-  return statuses[track].enabled;
+  return statuses[track].external.enabled;
 }
 
 int Player::GetCurrentTick() const {
@@ -35,7 +35,6 @@ void Player::Reset() {
   global_time   = 0;
   time_per_tick = 0;
   fine_time     = 0;
-  statuses = {};
   InitTracks();
 }
 
@@ -49,6 +48,13 @@ void Player::SkipToTick(i32 tick) {
 }
 
 void Player::InitTracks() {
+  // save external status
+  std::vector<TrackStatus::ExternalControl> controls{};
+  controls.reserve(statuses.size());
+  for (auto& status : statuses) {
+    controls.push_back(status.external);
+  }
+
   statuses = {};
   for (const auto& track : song->tracks) {
     statuses.emplace_back();
@@ -58,6 +64,11 @@ void Player::InitTracks() {
 
   if (time_per_tick == 0) {
     Error("No tempo found at start of song");
+  }
+
+  // restore external status
+  for (int i = 0; i < controls.size(); i++) {
+    statuses[i].external = controls[i];
   }
 }
 
@@ -260,6 +271,7 @@ double Player::TrackStatus::GetPitchAdjust(double dt) const {
   if (modt == 0) {
     adjust += 16 * modM(dt);
   }
+
   return keyshift + (adjust / 256.0);
 }
 
@@ -288,7 +300,7 @@ Sample Player::GetSample() const {
 
   Sample total = {};
   for (const auto& status : statuses) {
-    if (!status.enabled) continue;
+    if (!status.external.enabled) continue;
 
     Sample superposition = {};
     for (const auto& note : status.current_notes) {

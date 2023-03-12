@@ -53,7 +53,7 @@ void Track::Parse(const u8* data) {
       }
     }
 
-    Debug("Parsing %02x command", cmd);
+    // Debug("Parsing %02x command", cmd);
     events.push_back(Event{
       // initialize as meta event (ignored)
       Event::Type::Meta,

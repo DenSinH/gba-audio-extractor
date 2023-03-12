@@ -46,14 +46,16 @@ private:
 
   struct TrackStatus {
     // external control
-    bool enabled = true;
+    struct ExternalControl {
+      bool enabled = true;
+    } external;
 
     // control variables
     i32 keyshift   = 0;
     double vol    = 0;
     i32 pan        = 0;
     i32 bend       = 0;
-    u32 bend_range = 2;
+    i32 bend_range = 2;
     u32 lfo_speed  = 22;
     u32 lfo_delay  = 0;
     u32 mod        = 0;
