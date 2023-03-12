@@ -88,6 +88,7 @@ struct DirectSound final : public Voice {
   std::vector<u8> samples;
   u32 freq;
   u32 loop_start;
+  bool do_loop;
 
   double GetFrequency(double midi_key) const final;
   double WaveForm(double integrated_time) const final;

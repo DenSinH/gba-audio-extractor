@@ -105,6 +105,10 @@ double DirectSound::WaveForm(double integrated_time) const {
   // todo: interpolation with:
   const double sampleIndexFine = integrated_time - sampleIndexCourse;
   if (sampleIndexCourse > samples.size()) {
+    if (!do_loop) {
+      // return last sample
+      return double(i8(samples.back())) / 256.0;
+    }
     sampleIndexCourse = loop_start + (sampleIndexCourse % (samples.size() - loop_start));
   }
 
@@ -256,6 +260,8 @@ std::unique_ptr<Voice> VoiceGroup::ParseNext() const {
 
       _voice->freq       = util::Read<u32>(&wave_data[4]);
       _voice->loop_start = util::Read<u32>(&wave_data[8]);
+      u16 flags          = util::Read<u16>(&wave_data[2]);
+      _voice->do_loop    = (flags & 0xc000) != 0;
 
       u32 size = util::Read<u32>(&wave_data[12]);
       _voice->samples = {&wave_data[16], &wave_data[16 + size]};
