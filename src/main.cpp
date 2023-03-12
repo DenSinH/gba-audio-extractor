@@ -23,11 +23,18 @@ int main() {
 //  u32 start = 14506168;
 //  u32 header_offset = 3140;
   // bgmDarkHyruleCastle
-//  u32 start = 14509348;
-//  u32 header_offset = 1752;
+  u32 start = 14509348;
+  u32 header_offset = 1752;
   // bgmStory
-  u32 start = 14485172;
-  u32 header_offset = 992;
+//  u32 start = 14485172;
+//  u32 header_offset = 992;
+  // todo: cursor goes off screen
+  // bgmCaveOfFlames
+//  u32 start = 14512520;
+//  u32 header_offset = 1256;
+  // bgmPicoriFestival
+//  u32 start = 14538036;
+//  u32 header_offset = 1308;
   // sfxRupeeBounce
 //  u32 start = 14545056;
 //  u32 header_offset = 28;
