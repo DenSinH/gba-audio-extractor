@@ -23,21 +23,27 @@ int main() {
 //  u32 start = 14506168;
 //  u32 header_offset = 3140;
   // bgmDarkHyruleCastle
-  u32 start = 14509348;
-  u32 header_offset = 1752;
+//  u32 start = 14509348;
+//  u32 header_offset = 1752;
+  // bgmStory
+  u32 start = 14485172;
+  u32 header_offset = 992;
+  // sfxRupeeBounce
+//  u32 start = 14545056;
+//  u32 header_offset = 28;
 
   auto song   = Song::Extract(util::GetPointer(start + header_offset));
   auto player = Player(&song);
 
-  player.SkipToTick(690);
-  player.paused = true;
+//  player.SkipToTick(690);
+//  player.paused = true;
 //  player.ToggleTrackEnable(0);
-  player.ToggleTrackEnable(1);
-  player.ToggleTrackEnable(2);
-  player.ToggleTrackEnable(3);
-  player.ToggleTrackEnable(4);
-  player.ToggleTrackEnable(5);
-  player.ToggleTrackEnable(6);
+//  player.ToggleTrackEnable(1);
+//  player.ToggleTrackEnable(2);
+//  player.ToggleTrackEnable(3);
+//  player.ToggleTrackEnable(4);
+//  player.ToggleTrackEnable(5);
+//  player.ToggleTrackEnable(6);
 //  player.ToggleTrackEnable(7);
 
   frontend::Run(&player);

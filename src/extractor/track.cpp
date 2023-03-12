@@ -233,41 +233,43 @@ void Track::Parse(const u8* data) {
 void Track::PostProcess() {
   // filter out meta events and fix TIEs
   std::vector<Event> processed{};
-  Event* current_tie = nullptr;
+  processed.reserve(events.size());
+  i32 current_tie = -1;
 
   for (auto& event : events) {
     if (event.type == Event::Type::Meta) {
       // meta events may need to be handled differently
       switch (event.meta.type) {
         case Meta::Type::Tie: {
-          if (current_tie) {
+          if (current_tie != -1) {
             Error("Double tie in track");
           }
 
           // save the tie, convert to note at EOT
+          current_tie = processed.size();
           processed.push_back(event);
-          current_tie = &processed.back();
           break;
         }
         case Meta::Type::Eot: {
-          if (!current_tie) {
+          if (current_tie == -1) {
             Error("End of tie without active tie");
           }
-          if (event.meta.eot.key > 0 && (current_tie->meta.tie.note.key != event.meta.eot.key)) {
+          auto& tie = processed[current_tie];
+          if (event.meta.eot.key > 0 && (tie.meta.tie.note.key != event.meta.eot.key)) {
             Error(
                 "End tie of different note, got %d, expected %d",
-                current_tie->meta.tie.note.key, event.meta.eot.key
+                tie.meta.tie.note.key, event.meta.eot.key
             );
           }
 
-          auto note = current_tie->meta.tie.note;
+          auto note = tie.meta.tie.note;
           // note length is difference between EOT and TIE
-          note.length = event.tick - current_tie->tick;
+          note.length = event.tick - tie.tick;
 
           // change TIE event to note
-          current_tie->type = Event::Type::Note;
-          current_tie->note = note;
-          current_tie = nullptr;
+          tie.type = Event::Type::Note;
+          tie.note = note;
+          current_tie = -1;
           break;
         }
         default: {
@@ -277,14 +279,14 @@ void Track::PostProcess() {
     }
     else {
       // just copy over normal events
-      if ((event.type == Event::Type::Goto) && current_tie) {
+      if ((event.type == Event::Type::Goto) && (current_tie != -1)) {
         Error("Active tie during GOTO command");
       }
       processed.push_back(event);
     }
   }
 
-  if (current_tie) {
+  if (current_tie != -1) {
     Error("Active tie at FINE");
   }
   events = std::move(processed);

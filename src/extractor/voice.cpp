@@ -100,19 +100,32 @@ double DirectSound::GetFrequency(double midi_key) const {
 
 double DirectSound::WaveForm(double integrated_time) const {
   // so if time is dt, we are at sample
-  u32 sampleIndexCourse = u32(integrated_time);
+  u32 sample_index_course = u32(integrated_time);
+  const double sample_index_fine = integrated_time - sample_index_course;
 
-  // todo: interpolation with:
-  const double sampleIndexFine = integrated_time - sampleIndexCourse;
-  if (sampleIndexCourse > samples.size()) {
+  if (sample_index_course > samples.size()) {
     if (!do_loop) {
       // return last sample
       return double(i8(samples.back())) / 256.0;
     }
-    sampleIndexCourse = loop_start + (sampleIndexCourse % (samples.size() - loop_start));
+    sample_index_course = loop_start + (sample_index_course % (samples.size() - loop_start));
+  }
+  const double current_sample = double(i8(samples[sample_index_course])) / 256.0;
+
+  double next_sample;
+  if (sample_index_course + 1 > samples.size()) {
+    if (!do_loop) {
+      // no interpolation
+      return current_sample;
+    }
+    next_sample = double(i8(samples[loop_start])) / 256.0;
+  }
+  else {
+    next_sample = double(i8(samples[sample_index_course + 1])) / 256.0;
   }
 
-  return double(i8(samples[sampleIndexCourse])) / 256.0;
+  // linear interpolation
+  return (1 - sample_index_fine) * current_sample + sample_index_fine * next_sample;
 }
 
 void CgbVoice::CalculateEnvelope() {
@@ -148,13 +161,30 @@ double CgbVoice::GetFrequency(double midi_key) const {
 }
 
 double ProgrammableWave::WaveForm(double integrated_time) const {
-// sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
-  int sample_index = (int)(16 * integrated_time) % 32;
+  // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
+  integrated_time *= 16;
+  int sample_index = (int)(integrated_time) % 32;
+  double sample_index_fine = integrated_time - std::floor(integrated_time);
+
   u8 sample = samples[sample_index >> 1];
-  if (!(sample_index & 1)) {
-    sample = sample >> 4;
+  if (!(sample_index & 1)) sample = sample >> 4;
+  sample &= 0xf;
+
+  u8 next_sample;
+  // if we are in the first sample, interpolate with 0 instead
+  if (integrated_time < 0.5) {
+    next_sample = 0;
+    sample_index_fine = 1 - sample_index_fine;
   }
-  return double(sample & 0xf) / 15.0;
+  else {
+    next_sample = samples[((sample_index + 1) % 32) >> 1];
+    if (!(sample_index & 1)) next_sample = next_sample >> 4;
+    next_sample &= 0xf;
+  }
+
+  // linear interpolation
+  // - 0.5 to prevent popping on note starts
+  return (1 - sample_index_fine) * (sample / 15.0) + sample_index_fine * (next_sample / 15.0) - 0.5;
 }
 
 double Square::WaveForm(double integrated_time) const {
