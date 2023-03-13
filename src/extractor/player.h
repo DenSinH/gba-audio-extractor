@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <list>
+#include <deque>
 
 
 struct Sample {
@@ -18,14 +19,15 @@ struct PanVolume {
 
 struct Player {
   const Song* song;
+  double sample_rate;
+
   bool paused = false;
 
-  explicit Player(const Song* song) : song{song} {
+  explicit Player(const Song* song, double sample_rate) : song{song}, sample_rate{sample_rate} {
     InitTracks();
   }
 
-  void TickTime(double dt);
-  Sample GetSample() const;
+  Sample GetNextSample();
   void ToggleTrackEnable(i32 track);
   bool GetTrackEnable(i32 track);
   int GetCurrentTick() const;
@@ -76,12 +78,19 @@ private:
 
   std::vector<TrackStatus> statuses{};
 
-  mutable Sample last_sample = {};
+  Sample last_sample = {};
+
+  static constexpr double ReverbFrames = 7;
+  std::deque<Sample> reverb_buffer = {};
 
   void Reset();
   void InitTracks();
+  void TickTime();
   void TickTracks();
   void TickTrack(const Track& track, TrackStatus& status);
   void TickEvents(const Track& track, TrackStatus& status);
   void TickNotes(const Track& track, TrackStatus& status);
+
+  void AddReverbSample(Sample& sample);
+  double GetReverb() const;
 };

@@ -23,8 +23,8 @@ int main() {
 //  u32 start = 14506168;
 //  u32 header_offset = 3140;
   // bgmDarkHyruleCastle
-  u32 start = 14509348;
-  u32 header_offset = 1752;
+//  u32 start = 14509348;
+//  u32 header_offset = 1752;
   // bgmStory
 //  u32 start = 14485172;
 //  u32 header_offset = 992;
@@ -35,12 +35,16 @@ int main() {
   // bgmPicoriFestival
 //  u32 start = 14538036;
 //  u32 header_offset = 1308;
+  // bgmFileSelect (high reverb (60))
+  u32 start = 14471404;
+  u32 header_offset = 960;
   // sfxRupeeBounce
 //  u32 start = 14545056;
 //  u32 header_offset = 28;
 
   auto song   = Song::Extract(util::GetPointer(start + header_offset));
-  auto player = Player(&song);
+  static constexpr double SampleRate = 44100;
+  auto player = Player(&song, 44100);
 
 //  player.SkipToTick(690);
 //  player.paused = true;

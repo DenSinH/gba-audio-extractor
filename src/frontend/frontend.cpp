@@ -40,8 +40,7 @@ static void TestAudioCallback(void*, u8* _stream, int len) {
   float* stream = (float*)_stream;
 
   for (int i = 0; i < len / sizeof(float); i += 2) {
-    gPlayer->TickTime(1.0f / audio_spec.freq);
-    const auto sample = gPlayer->GetSample();
+    const auto sample = gPlayer->GetNextSample();
     stream[i]     = 0.2 * sample.left;
     stream[i + 1] = 0.2 * sample.right;
   }
@@ -143,6 +142,7 @@ void Destroy() {
 
 int Run(Player* player) {
   gPlayer = player;
+  audio_spec.freq = player->sample_rate;
   InitSDL();
   InitImGui();
 

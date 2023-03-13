@@ -35,6 +35,7 @@ void Player::Reset() {
   global_time   = 0;
   time_per_tick = 0;
   fine_time     = 0;
+  reverb_buffer = {};
   InitTracks();
 }
 
@@ -72,13 +73,13 @@ void Player::InitTracks() {
   }
 }
 
-void Player::TickTime(double dt) {
+void Player::TickTime() {
   if (paused) {
     return;
   }
 
-  global_time += dt;
-  fine_time   += dt;
+  global_time += 1 / sample_rate;
+  fine_time   += 1 / sample_rate;
 
   for (auto& status : statuses) {
     for (auto& note : status.current_notes) {
@@ -87,7 +88,7 @@ void Player::TickTime(double dt) {
       const double fine_adjust  = pitch_adjust - keyshift;
       const i32 key             = note.note->key + keyshift;
 
-      note.voice.Tick(key, fine_adjust, dt);
+      note.voice.Tick(key, fine_adjust, 1 / sample_rate);
     }
   }
   
@@ -293,7 +294,39 @@ PanVolume Player::TrackStatus::GetPannedVolume(double dt) const {
   };
 }
 
-Sample Player::GetSample() const {
+// In the m4a engine, we have soundInfo->pcmDmaPeriod = PCM_DMA_BUF_SIZE / soundInfo->pcmSamplesPerVBlank = 1584 / 224
+// by default. The engine takes the left and right sample of pcmDmaPeriod and pcmDmaPeriod - 1 frames ago,
+// adds all four samples together and multiplies it by reverb / 512
+void Player::AddReverbSample(Sample& sample) {
+  const double MaxBufferSize   = ReverbFrames * FrameTime * sample_rate;
+  reverb_buffer.push_back(sample);
+  if (reverb_buffer.size() > MaxBufferSize) {
+    reverb_buffer.pop_front();
+  }
+}
+
+double Player::GetReverb() const {
+  const u32 SamplesPerFrame  = (u32)(FrameTime * sample_rate);
+  if (reverb_buffer.empty()) {
+    return {};
+  }
+  else if (reverb_buffer.size() < SamplesPerFrame) {
+    const auto& first = reverb_buffer.front();
+    return (first.left + first.right) * song->reverb / 512.0;
+  }
+  else if (reverb_buffer.size() < 2 * SamplesPerFrame) {
+    const auto& first = reverb_buffer[(u32)SamplesPerFrame - 1];
+    return (first.left + first.right) * song->reverb / 512.0;
+  }
+  else {
+    const auto& first  = reverb_buffer[(u32)SamplesPerFrame - 1];
+    const auto& second = reverb_buffer[(u32)SamplesPerFrame - 1];
+    return (first.left + first.right + second.left + second.right) * song->reverb / 512.0;
+  }
+}
+
+Sample Player::GetNextSample() {
+  TickTime();
   if (paused) {
     return last_sample;
   }
@@ -317,6 +350,14 @@ Sample Player::GetSample() const {
     total.left  += superposition.left;
     total.right += superposition.right;
   }
+
+  // add reverb
+  const auto reverb = GetReverb();
+  total.left  += reverb;
+  total.right += reverb;
+
+  // save reverb for future
+  AddReverbSample(total);
 
   last_sample = total;
   return total;
