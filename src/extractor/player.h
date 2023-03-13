@@ -66,6 +66,8 @@ private:
 
     // internal state
     i32 tick = 0;
+    bool track_ended = false;
+
     const Event* current_event = nullptr;
     const Voice* voice         = nullptr;
     std::list<PlayingNote> current_notes{};

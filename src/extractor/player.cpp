@@ -28,7 +28,23 @@ bool Player::GetTrackEnable(i32 track) {
 }
 
 int Player::GetCurrentTick() const {
-  return statuses[0].tick;
+  i32 tick = -1;
+  for (const auto& status : statuses) {
+    if (status.track_ended) {
+      continue;
+    }
+
+    if (status.tick > tick) {
+      tick = status.tick;
+    }
+  }
+
+  // all tracks ended
+  if (tick == -1) {
+    return statuses[0].tick;
+  }
+
+  return tick;
 }
 
 void Player::Reset() {
@@ -82,6 +98,10 @@ void Player::TickTime() {
   fine_time   += 1 / sample_rate;
 
   for (auto& status : statuses) {
+    if (status.track_ended) {
+      continue;
+    }
+
     for (auto& note : status.current_notes) {
       const double pitch_adjust = status.GetPitchAdjust(global_time - note.time_started);
       const i32 keyshift        = std::floor(pitch_adjust);
@@ -102,6 +122,9 @@ void Player::TickTime() {
 
 void Player::TickTracks() {
   for (int i = 0; i < statuses.size(); i++) {
+    if (statuses[i].track_ended) {
+      continue;
+    }
     statuses[i].tick++;
     TickTrack(song->tracks[i], statuses[i]);
   }
@@ -198,6 +221,7 @@ void Player::TickEvents(const Track& track, TrackStatus& status) {
         break;
       }
       case Event::Type::Fine:
+        status.track_ended = true;
         return;
     }
 
@@ -264,6 +288,8 @@ double Player::TrackStatus::modM(double dt) const {
     return 0;
   }
   dt -= lfo_delay * FrameTime;
+
+  // this is originally a triangle wave
   return mod * std::sin(2 * 3.141592 * (lfo_speed / 256.0) * dt * FrameFreq);
 }
 

@@ -110,7 +110,7 @@ void Sequencer::Draw() {
       ImGui::Text("Velocity: %d", selected_event->note.velocity);
     }
     else if (selected_event->type == Event::Type::Controller) {
-      ImGui::Text("Controller: %s", ControllerEventNames.at(selected_event->controller.type));
+      ImGui::Text("Controller: %s %02x", ControllerEventNames.at(selected_event->controller.type), selected_event->controller.val);
     }
     else if (selected_event->type == Event::Type::VoiceChange) {
       ImGui::Text("Voice: %d", selected_event->voice_change.voice);
