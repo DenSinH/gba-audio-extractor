@@ -9,10 +9,11 @@ const u8* file;
 
 
 int main() {
-  const std::string file_name = "D:\\Projects\\CProjects\\MusicExtractor\\files\\zelda.gba";
+  const std::string file_name = "D:\\Projects\\CProjects\\gba-audio-extractor\\files\\zelda.gba";
   const auto file_data = util::LoadBin(file_name);
   file = file_data.data();
 
+  // offsets, see https://github.com/zeldaret/tmc/blob/cd2b8d4b531ee5b4b78d04964a3f895edc31db73/assets/sounds.json#L665
   // bgmBossTheme
 //  u32 start = 14524276;
 //  u32 header_offset = 1156;

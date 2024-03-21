@@ -103,7 +103,7 @@ double DirectSound::WaveForm(double integrated_time) const {
   u32 sample_index_course = u32(integrated_time);
   const double sample_index_fine = integrated_time - sample_index_course;
 
-  if (sample_index_course > samples.size()) {
+  if (sample_index_course >= samples.size()) {
     if (!do_loop) {
       // return last sample
       return double(i8(samples.back())) / 256.0;
@@ -113,7 +113,7 @@ double DirectSound::WaveForm(double integrated_time) const {
   const double current_sample = double(i8(samples[sample_index_course])) / 256.0;
 
   double next_sample;
-  if (sample_index_course + 1 > samples.size()) {
+  if (sample_index_course + 1 >= samples.size()) {
     if (!do_loop) {
       // no interpolation
       return current_sample;

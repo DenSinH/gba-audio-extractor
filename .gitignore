@@ -3,3 +3,5 @@ cmake-*/
 *.gba
 *.out
 *.mp4
+build/
+.vscode/
