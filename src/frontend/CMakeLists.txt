@@ -3,6 +3,8 @@ find_package(SDL2 REQUIRED)
 add_library(Frontend STATIC
         frontend.cpp
         frontend.h
+        settings.cpp
+        settings.h
         widgets/sequencer.cpp
         widgets/sequencer.h 
         widgets/event_tables.cpp 

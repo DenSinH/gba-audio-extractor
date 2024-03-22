@@ -1,5 +1,6 @@
 #include "frontend.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 #include <cstdio>
@@ -18,6 +19,7 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
+#include "settings.h"
 #include "widgets/sequencer.h"
 #include "modules/imgui-filebrowser/imfilebrowser.h"
 #include "constants.h"
@@ -29,18 +31,12 @@ static SDL_GLContext gl_context;
 static const char* glsl_version = "#version 130";
 
 static Mp2kDriver* driver = nullptr;
+
+static Settings settings = {};
+static std::string filename = {};
 static float volumesq = 0.25f;
 static int songidx = 0;
 
-static void AudioCallback(void*, u8* stream, int len);
-
-static SDL_AudioSpec audio_spec = {
-    .freq = int(SampleRate),
-    .format = AUDIO_F32,
-    .channels = 2,
-    .samples = 512,
-    .callback = AudioCallback
-};
 
 static void AudioCallback(void*, u8* _stream, int len) {
   float* stream = (float*)_stream;
@@ -57,7 +53,15 @@ static void AudioCallback(void*, u8* _stream, int len) {
   }
 }
 
-void InitSDLVideo() {
+static SDL_AudioSpec audio_spec = {
+    .freq = int(SampleRate),
+    .format = AUDIO_F32,
+    .channels = 2,
+    .samples = 512,
+    .callback = AudioCallback
+};
+
+static void InitSDLVideo() {
 
   // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -104,7 +108,7 @@ void InitSDLVideo() {
   SDL_GL_SetSwapInterval(1); // Enable vsync
 }
 
-void InitSDLAudio() {
+static void InitSDLAudio() {
   if ( SDL_OpenAudio(&audio_spec, NULL) < 0 ) {
     printf("Unable to open audio: %s\n", SDL_GetError());
     exit(1);
@@ -112,8 +116,8 @@ void InitSDLAudio() {
   SDL_PauseAudio(0);
 }
 
-void InitSDL() {
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
+static void InitSDL() {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0)
   {
     printf("Failed to initialize SDL: %s\n", SDL_GetError());
     exit(1);
@@ -123,7 +127,7 @@ void InitSDL() {
   InitSDLAudio();
 }
 
-void InitImGui() {
+static void InitImGui() {
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -139,7 +143,25 @@ void InitImGui() {
   ImGui_ImplOpenGL3_Init(glsl_version);
 }
 
-void Destroy() {
+static void InitSettings() {
+  AddSettingsHandler(settings);
+  ImGuiIO& io = ImGui::GetIO(); 
+  if (io.IniFilename)
+    ImGui::LoadIniSettingsFromDisk(io.IniFilename);
+  settings.Read("volume", volumesq);
+  settings.Read("filename", filename);
+  settings.Read("songidx", songidx);
+}
+
+static void SaveSettings() {
+  ImGuiIO& io = ImGui::GetIO(); 
+  if (io.IniFilename)
+    ImGui::SaveIniSettingsToDisk(io.IniFilename);
+}
+
+static void Destroy() {
+  SaveSettings();
+
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL2_Shutdown();
   ImGui::DestroyContext();
@@ -154,12 +176,28 @@ int Run(Mp2kDriver* _driver) {
   driver = _driver;
   InitSDL();
   InitImGui();
+  InitSettings();
 
   ImGuiIO& io = ImGui::GetIO();
   auto sequencer = Sequencer(driver);
   auto fdialog = ImGui::FileBrowser();
   fdialog.SetTitle("Choose ROM");
   fdialog.SetTypeFilters({".gba", ".bin"});
+  {
+    std::string fdialogpwd{};
+    settings.Read("fdialogpwd", fdialogpwd);
+    if (!fdialogpwd.empty()) {
+      fdialog.SetPwd(fdialogpwd);
+    }
+  }
+
+  if (!filename.empty()) {
+    driver->Init(filename);
+    if (songidx < driver->song_count) {
+      driver->SelectSong(songidx);
+      sequencer.SelectSong();
+    }
+  }
 
   // Main loop
   bool done = false;
@@ -182,12 +220,9 @@ int Run(Mp2kDriver* _driver) {
         done = true;
     }
 
-    // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
-
-//    if (true) ImGui::ShowDemoWindow(nullptr);
 
     sequencer.Draw();
     ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -200,6 +235,7 @@ int Run(Mp2kDriver* _driver) {
       ImGui::SetNextItemWidth(200);
       if (ImGui::InputInt("Song ID", &songidx)) {
         songidx = std::clamp(songidx, 0, driver->song_count);
+        settings.Set("songidx", songidx);
         if (songidx < driver->song_count) {
           driver->SelectSong(songidx);
           sequencer.SelectSong();
@@ -217,15 +253,21 @@ int Run(Mp2kDriver* _driver) {
       }
       ImGui::SameLine();
       ImGui::SetNextItemWidth(200);
-      ImGui::SliderFloat("Volume", &volumesq, 0.0, 1.0);
+      if (ImGui::SliderFloat("Volume", &volumesq, 0.0, 1.0)) {
+        settings.Set("volume", volumesq);
+      }
     }
     ImGui::End();
 
     fdialog.Display();
     if (fdialog.HasSelected()) {
-      driver->Init(fdialog.GetSelected().string());
+      filename = fdialog.GetSelected().string();
+      driver->Init(filename);
+      settings.Set("filename", filename);
       songidx = 0;
       driver->SelectSong(songidx);
+      sequencer.SelectSong();
+      settings.Set("fdialogpwd", fdialog.GetPwd().string());
       fdialog.ClearSelected();
     }
 
