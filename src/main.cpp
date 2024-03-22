@@ -2,16 +2,27 @@
 #include "frontend/frontend.h"
 #include "util/file.h"
 #include "util/gba.h"
+#include "util/bin.h"
+#include "extractor/mp2k_driver.h"
 
 #include <string>
-
-const u8* file;
 
 
 int main() {
   const std::string file_name = "D:\\Projects\\CProjects\\gba-audio-extractor\\files\\zelda.gba";
-  const auto file_data = util::LoadBin(file_name);
-  file = file_data.data();
+  util::LoadFile(file_name);
+  auto driver = Mp2kDriver();
+  driver.Init();
+
+  // agbplay: https://github.com/ipatix/agbplay/tree/master
+  // song data structure:
+  // https://github.com/zeldaret/tmc/blob/cd2b8d4b531ee5b4b78d04964a3f895edc31db73/include/gba/m4a.h
+  // gSongTable references in 
+  // https://github.com/zeldaret/tmc/blob/master/src/sound.c
+  // https://github.com/zeldaret/tmc/blob/master/src/gba/m4a.c
+  // which are both "default" libgba files
+  // find song table from saptapper
+  // https://github.com/loveemu/saptapper/blob/2da643b718ec6308c4064f5aae769c035c496368/src/saptapper/mp2k_driver.cpp#L165
 
   // offsets, see https://github.com/zeldaret/tmc/blob/cd2b8d4b531ee5b4b78d04964a3f895edc31db73/assets/sounds.json#L665
   // bgmBossTheme
@@ -42,9 +53,10 @@ int main() {
 //  u32 start = 14545056;
 //  u32 header_offset = 28;
 
-  auto song   = Song::Extract(util::GetPointer(start + header_offset));
+  // auto song   = Song::Extract(util::GetPointer(start + header_offset));
+  auto song = Song::Extract(driver.GetSongPtr(34));
   static constexpr double SampleRate = 44100;
-  auto player = Player(&song, 44100);
+  auto player = Player(&song, SampleRate);
 
 //  player.SkipToTick(690);
 //  player.paused = true;

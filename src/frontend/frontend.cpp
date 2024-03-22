@@ -178,7 +178,9 @@ int Run(Player* player) {
 //    if (true) ImGui::ShowDemoWindow(nullptr);
 
     sequencer.Draw();
-    if (ImGui::Begin("Controls")) {
+    ImGui::SetNextWindowPos(ImVec2(0.2 * io.DisplaySize.x, 0));
+    ImGui::SetNextWindowSize(ImVec2(0.8 * io.DisplaySize.x, 50));
+    if (ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize)) {
       if (ImGui::Button("Pause/Play")) {
         player->paused ^= true;
       }

@@ -5,3 +5,4 @@ cmake-*/
 *.mp4
 build/
 .vscode/
+imgui.ini

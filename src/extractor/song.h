@@ -23,5 +23,6 @@ struct Song {
   VoiceGroup voicegroup;
   std::vector<Track> tracks;
 
+  static bool Validate(const u8* header);
   static Song Extract(const u8* header);
 };

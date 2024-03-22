@@ -9,6 +9,8 @@
 #include <vector>
 #include <string>
 
+extern std::vector<u8> file;
+
 namespace util {
 
 static std::vector<u8> LoadBin(const std::string& path) {
@@ -22,6 +24,10 @@ static std::vector<u8> LoadBin(const std::string& path) {
   bin.assign(std::istreambuf_iterator<u8>{file}, {});
   Debug("Loaded %llx bytes from %s", bin.size(), path.c_str());
   return std::move(bin);
+}
+
+static void LoadFile(const std::string& path) {
+  file = LoadBin(path);
 }
 
 }

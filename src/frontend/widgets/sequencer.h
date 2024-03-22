@@ -6,7 +6,6 @@
 namespace frontend {
 
 struct Sequencer final : public ImSequencer::SequenceInterface {
-  bool show = true;
   Player* player;
 
   explicit Sequencer(Player* player);

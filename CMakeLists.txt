@@ -8,6 +8,7 @@ include_directories(src/include)
 include_directories(src)
 
 add_executable(GbaMusicExtractor
+        src/static.cpp
         src/main.cpp)
 
 add_subdirectory(src/extractor)

@@ -188,6 +188,7 @@ void Track::Parse(const u8* data) {
         };
         break;
       }
+      // TIE: start note at TIE command, end at EOT command
       case GbaCmd::TIE: {
         events.back().meta.type = Meta::Type::Tie;
 
@@ -221,8 +222,6 @@ void Track::Parse(const u8* data) {
       }
       case GbaCmd::MEMACC:
       case GbaCmd::XCMD:
-        // todo: tie
-        // TIE: start note at TIE command, end at EOT command
       default: {
         Error("Invalid or unimplemented command: %02x", cmd);
       }

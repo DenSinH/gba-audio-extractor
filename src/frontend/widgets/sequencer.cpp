@@ -75,11 +75,11 @@ void Sequencer::RightClick(int timeline) {
 }
 
 void Sequencer::Draw() {
-  if (!ImGui::Begin("Sequencer", &show)) {
-    ImGui::End();
-    return;
-  }
   const auto io = ImGui::GetIO();
+  
+  ImGui::SetNextWindowPos(ImVec2(0.2 * io.DisplaySize.x, 50));
+  ImGui::SetNextWindowSize(ImVec2(0.8 * io.DisplaySize.x, 0.5 * io.DisplaySize.y));
+  ImGui::Begin("Sequencer", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
   const int player_tick = player->GetCurrentTick();
   current_tick = player_tick;
   ImSequencer::Sequencer(
