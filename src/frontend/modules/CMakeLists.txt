@@ -10,6 +10,7 @@ add_library(ImGui STATIC
         ${IMGUI_DIR}/imgui.cpp
         ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
         ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
+        imgui-filebrowser/imfilebrowser.h
         sequencer/ImSequencer.cpp
         sequencer/ImSequencer.h)
 

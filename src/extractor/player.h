@@ -18,12 +18,11 @@ struct PanVolume {
 };
 
 struct Player {
-  const Song* song;
-  double sample_rate;
+  const Song song;
 
-  bool paused = false;
+  bool paused = true;
 
-  explicit Player(const Song* song, double sample_rate) : song{song}, sample_rate{sample_rate} {
+  explicit Player(Song song) : song{std::move(song)} {
     InitTracks();
   }
 
@@ -32,6 +31,7 @@ struct Player {
   bool GetTrackEnable(i32 track);
   int GetCurrentTick() const;
   void SkipToTick(i32 tick);
+  const Note* GetTrackNote(i32 track);
 
 private:
   double time_per_tick = 0;

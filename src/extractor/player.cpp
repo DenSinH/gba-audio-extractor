@@ -27,6 +27,16 @@ bool Player::GetTrackEnable(i32 track) {
   return statuses[track].external.enabled;
 }
 
+const Note* Player::GetTrackNote(i32 track) {
+  if (track >= statuses.size()) {
+    Error("Track out of range for song: %d", track);
+  }
+  if (!statuses[track].current_notes.empty()) {
+    return statuses[track].current_notes.front().note;
+  }
+  return nullptr;
+}
+
 int Player::GetCurrentTick() const {
   i32 tick = -1;
   for (const auto& status : statuses) {
@@ -73,7 +83,7 @@ void Player::InitTracks() {
   }
 
   statuses = {};
-  for (const auto& track : song->tracks) {
+  for (const auto& track : song.tracks) {
     statuses.emplace_back();
     statuses.back().current_event = track.events.data();
     TickEvents(track, statuses.back());
@@ -94,8 +104,8 @@ void Player::TickTime() {
     return;
   }
 
-  global_time += 1 / sample_rate;
-  fine_time   += 1 / sample_rate;
+  global_time += 1 / SampleRate;
+  fine_time   += 1 / SampleRate;
 
   for (auto& status : statuses) {
     if (status.track_ended) {
@@ -108,7 +118,7 @@ void Player::TickTime() {
       const double fine_adjust  = pitch_adjust - keyshift;
       const i32 key             = note.note->key + keyshift;
 
-      note.voice.Tick(key, fine_adjust, 1 / sample_rate);
+      note.voice.Tick(key, fine_adjust, 1 / SampleRate);
     }
   }
   
@@ -126,7 +136,7 @@ void Player::TickTracks() {
       continue;
     }
     statuses[i].tick++;
-    TickTrack(song->tracks[i], statuses[i]);
+    TickTrack(song.tracks[i], statuses[i]);
   }
 }
 
@@ -162,7 +172,7 @@ void Player::TickEvents(const Track& track, TrackStatus& status) {
         break;
       }
       case Event::Type::VoiceChange: {
-        status.voice = &song->voicegroup[event.voice_change.voice];
+        status.voice = &song.voicegroup[event.voice_change.voice];
         break;
       }
       case Event::Type::Controller: {
@@ -324,7 +334,7 @@ PanVolume Player::TrackStatus::GetPannedVolume(double dt) const {
 // by default. The engine takes the left and right sample of pcmDmaPeriod and pcmDmaPeriod - 1 frames ago,
 // adds all four samples together and multiplies it by reverb / 512
 void Player::AddReverbSample(Sample& sample) {
-  const double MaxBufferSize   = ReverbFrames * FrameTime * sample_rate;
+  const double MaxBufferSize = ReverbFrames * FrameTime * SampleRate;
   reverb_buffer.push_back(sample);
   if (reverb_buffer.size() > MaxBufferSize) {
     reverb_buffer.pop_front();
@@ -332,22 +342,22 @@ void Player::AddReverbSample(Sample& sample) {
 }
 
 double Player::GetReverb() const {
-  const u32 SamplesPerFrame  = (u32)(FrameTime * sample_rate);
+  const u32 SamplesPerFrame  = (u32)(FrameTime * SampleRate);
   if (reverb_buffer.empty()) {
     return {};
   }
   else if (reverb_buffer.size() < SamplesPerFrame) {
     const auto& first = reverb_buffer.front();
-    return (first.left + first.right) * song->reverb / 512.0;
+    return (first.left + first.right) * song.reverb / 512.0;
   }
   else if (reverb_buffer.size() < 2 * SamplesPerFrame) {
     const auto& first = reverb_buffer[(u32)SamplesPerFrame - 1];
-    return (first.left + first.right) * song->reverb / 512.0;
+    return (first.left + first.right) * song.reverb / 512.0;
   }
   else {
     const auto& first  = reverb_buffer[(u32)SamplesPerFrame - 1];
     const auto& second = reverb_buffer[(u32)SamplesPerFrame - 1];
-    return (first.left + first.right + second.left + second.right) * song->reverb / 512.0;
+    return (first.left + first.right + second.left + second.right) * song.reverb / 512.0;
   }
 }
 

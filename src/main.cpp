@@ -10,9 +10,9 @@
 
 int main() {
   const std::string file_name = "D:\\Projects\\CProjects\\gba-audio-extractor\\files\\zelda.gba";
-  util::LoadFile(file_name);
   auto driver = Mp2kDriver();
-  driver.Init();
+  // driver.Init(file_name);
+  // driver.SelectSong(34);  // cloud tops
 
   // agbplay: https://github.com/ipatix/agbplay/tree/master
   // song data structure:
@@ -54,9 +54,6 @@ int main() {
 //  u32 header_offset = 28;
 
   // auto song   = Song::Extract(util::GetPointer(start + header_offset));
-  auto song = Song::Extract(driver.GetSongPtr(34));
-  static constexpr double SampleRate = 44100;
-  auto player = Player(&song, SampleRate);
 
 //  player.SkipToTick(690);
 //  player.paused = true;
@@ -69,7 +66,7 @@ int main() {
 //  player.ToggleTrackEnable(6);
 //  player.ToggleTrackEnable(7);
 
-  frontend::Run(&player);
+  frontend::Run(&driver);
 
   return 0;
 }

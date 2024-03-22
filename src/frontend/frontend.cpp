@@ -3,8 +3,10 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 #include <cstdio>
+#include <iostream>
+#include <cmath>
 #include <SDL.h>
-#include "extractor/player.h"
+#include "extractor/mp2k_driver.h"
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <SDL_opengles2.h>
 #else
@@ -17,6 +19,8 @@
 #endif
 
 #include "widgets/sequencer.h"
+#include "modules/imgui-filebrowser/imfilebrowser.h"
+#include "constants.h"
 
 namespace frontend {
 
@@ -24,25 +28,32 @@ static SDL_Window* window;
 static SDL_GLContext gl_context;
 static const char* glsl_version = "#version 130";
 
-Player* gPlayer;
+static Mp2kDriver* driver = nullptr;
+static float volumesq = 0.25f;
+static int songidx = 0;
 
-static void TestAudioCallback(void*, u8* stream, int len);
+static void AudioCallback(void*, u8* stream, int len);
 
 static SDL_AudioSpec audio_spec = {
-    .freq = 44100,        // sample rate
+    .freq = int(SampleRate),
     .format = AUDIO_F32,
     .channels = 2,
     .samples = 512,
-    .callback = TestAudioCallback
+    .callback = AudioCallback
 };
 
-static void TestAudioCallback(void*, u8* _stream, int len) {
+static void AudioCallback(void*, u8* _stream, int len) {
   float* stream = (float*)_stream;
 
-  for (int i = 0; i < len / sizeof(float); i += 2) {
-    const auto sample = gPlayer->GetNextSample();
-    stream[i]     = 0.2 * sample.left;
-    stream[i + 1] = 0.2 * sample.right;
+  if (driver && driver->player) {
+    for (int i = 0; i < len / sizeof(float); i += 2) {
+      const auto sample = driver->player->GetNextSample();
+      stream[i]     = 2 * std::sqrt(volumesq) * sample.left;
+      stream[i + 1] = 2 * std::sqrt(volumesq) * sample.right;
+    }
+  }
+  else {
+    std::memset(stream, 0, len);
   }
 }
 
@@ -122,7 +133,6 @@ void InitImGui() {
 
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();
-  //ImGui::StyleColorsLight();
 
   // Setup Platform/Renderer backends
   ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
@@ -140,14 +150,16 @@ void Destroy() {
 }
 
 
-int Run(Player* player) {
-  gPlayer = player;
-  audio_spec.freq = player->sample_rate;
+int Run(Mp2kDriver* _driver) {
+  driver = _driver;
   InitSDL();
   InitImGui();
 
   ImGuiIO& io = ImGui::GetIO();
-  auto sequencer = Sequencer(player);
+  auto sequencer = Sequencer(driver);
+  auto fdialog = ImGui::FileBrowser();
+  fdialog.SetTitle("Choose ROM");
+  fdialog.SetTypeFilters({".gba", ".bin"});
 
   // Main loop
   bool done = false;
@@ -178,14 +190,44 @@ int Run(Player* player) {
 //    if (true) ImGui::ShowDemoWindow(nullptr);
 
     sequencer.Draw();
-    ImGui::SetNextWindowPos(ImVec2(0.2 * io.DisplaySize.x, 0));
-    ImGui::SetNextWindowSize(ImVec2(0.8 * io.DisplaySize.x, 50));
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 50));
     if (ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize)) {
-      if (ImGui::Button("Pause/Play")) {
-        player->paused ^= true;
+      if (ImGui::Button("Choose file")) {
+        fdialog.Open();
       }
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(200);
+      if (ImGui::InputInt("Song ID", &songidx)) {
+        songidx = std::clamp(songidx, 0, driver->song_count);
+        if (songidx < driver->song_count) {
+          driver->SelectSong(songidx);
+          sequencer.SelectSong();
+        }
+      }
+      if (!driver->player) {
+        ImGui::BeginDisabled();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Pause/Play")) {
+        driver->player->paused ^= true;
+      }
+      if (!driver->player) {
+        ImGui::EndDisabled();
+      }
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(200);
+      ImGui::SliderFloat("Volume", &volumesq, 0.0, 1.0);
     }
     ImGui::End();
+
+    fdialog.Display();
+    if (fdialog.HasSelected()) {
+      driver->Init(fdialog.GetSelected().string());
+      songidx = 0;
+      driver->SelectSong(songidx);
+      fdialog.ClearSelected();
+    }
 
     // Rendering
     ImGui::Render();

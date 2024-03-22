@@ -18,6 +18,7 @@
 #include "types.h"
 #include "util/bin.h"
 #include "util/gba.h"
+#include "util/file.h"
 #include "error.h"
 
 extern std::vector<u8> file;
@@ -46,11 +47,19 @@ static const u8* find_loose(std::string_view pattern, unsigned int max_diff, con
   return nullptr;
 }
 
-void Mp2kDriver::Init() {
+void Mp2kDriver::Init(const std::string& filename) {
+  player = nullptr;
+  util::LoadFile(filename);
   song_table = FindSongTable();
   song_count = ReadSongCount(song_table);
 }
 
+void Mp2kDriver::SelectSong(u32 index) {
+  if (index >= song_count) {
+    Error("Out of bounds song requested");
+  }
+  player = std::make_unique<Player>(Song::Extract(GetSongPtr(index)));
+}
 
 const u8* Mp2kDriver::FindSelectSongFn() {
   using namespace std::literals::string_view_literals;
@@ -85,7 +94,7 @@ int Mp2kDriver::ReadSongCount(const u8* song_table) {
 }
 
 const u8* Mp2kDriver::GetSongPtr(u32 index) {
-  if (index > song_count) {
+  if (index >= song_count) {
     Error("Out of bounds song requested");
   }
   return util::GetPointer(util::Read<u32>(song_table + 8 * index));

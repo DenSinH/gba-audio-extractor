@@ -1,9 +1,9 @@
 #pragma once
 
-struct Player;
+struct Mp2kDriver;
 
 namespace frontend {
 
-int Run(Player* player);
+int Run(Mp2kDriver* driver);
 
 }

@@ -6,11 +6,13 @@
 
 namespace frontend {
 
-Sequencer::Sequencer(Player* player) : player{player} {
+
+void Sequencer::SelectSong() {
   max_frame = 0;
-  first_frame = player->GetCurrentTick() - 48;
-  was_paused = player->paused;
-  for (const auto& track : player->song->tracks) {
+  first_frame = driver->player->GetCurrentTick();
+  selected_event = nullptr;
+  was_paused = driver->player->paused;
+  for (const auto& track : driver->player->song.tracks) {
     max_frame = std::max(max_frame, track.length);
   }
 }
@@ -24,26 +26,39 @@ int Sequencer::GetFrameMax() const {
 }
 
 int Sequencer::GetTimelineCount() const {
-  return player->song->tracks.size();
+  assert(driver && driver->player);
+  return driver->player->song.tracks.size();
 }
 
 int Sequencer::GetTimelineItemCount(int index) const {
-  return player->song->tracks[index].events.size();
+  assert(driver && driver->player);
+  return driver->player->song.tracks[index].events.size();
 }
 
 std::string Sequencer::GetTimelineLabel(int index) const {
-  return "Track " + std::to_string(index + 1);
+  assert(driver && driver->player);
+  auto name = "Track " + std::to_string(index + 1);
+  const auto* note = driver->player->GetTrackNote(index);
+  if (note) {
+    name += ": " + std::string(NoteNames[note->key]);
+  }
+  else {
+    name += "     ";
+  }
+  return name;
 }
 
 unsigned int Sequencer::GetTimelineColor(int timeline) const {
-  if (player->GetTrackEnable(timeline)) {
+  assert(driver && driver->player);
+  if (driver->player->GetTrackEnable(timeline)) {
     return 0;
   }
   return 0xc08080aa;
 }
 
 void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int* color) const {
-  const auto& event = player->song->tracks[timeline].events[index];
+  assert(driver && driver->player);
+  const auto& event = driver->player->song.tracks[timeline].events[index];
   if (start)
     *start = event.tick;
   if (end) {
@@ -67,20 +82,27 @@ void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int*
 }
 
 void Sequencer::DoubleClick(int timeline, int index) {
-  selected_event = &player->song->tracks[timeline].events[index];
+  assert(driver && driver->player);
+  selected_event = &driver->player->song.tracks[timeline].events[index];
 }
 
 void Sequencer::RightClick(int timeline) {
-  player->ToggleTrackEnable(timeline);
+  assert(driver && driver->player);
+  driver->player->ToggleTrackEnable(timeline);
 }
 
 void Sequencer::Draw() {
   const auto io = ImGui::GetIO();
   
-  ImGui::SetNextWindowPos(ImVec2(0.2 * io.DisplaySize.x, 50));
-  ImGui::SetNextWindowSize(ImVec2(0.8 * io.DisplaySize.x, 0.5 * io.DisplaySize.y));
+  ImGui::SetNextWindowPos(ImVec2(0, 50));
+  ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.5 * io.DisplaySize.y));
   ImGui::Begin("Sequencer", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
-  const int player_tick = player->GetCurrentTick();
+  if (!(driver && driver->player)) {
+    ImGui::End();
+    return;
+  }
+
+  const int player_tick = driver->player->GetCurrentTick();
   current_tick = player_tick;
   ImSequencer::Sequencer(
      this, &current_tick, nullptr, &selected, &first_frame
@@ -89,17 +111,17 @@ void Sequencer::Draw() {
   if (current_tick != player_tick) {
     if (!dragging_frame) {
       // start dragging frame
-      was_paused = player->paused;
+      was_paused = driver->player->paused;
       dragging_frame = true;
     }
-    player->paused = true;
+    driver->player->paused = true;
   }
 
   if (dragging_frame && !io.MouseDown[0]) {
     // stop dragging frame
     dragging_frame = false;
-    player->SkipToTick(current_tick);
-    player->paused = was_paused;
+    driver->player->SkipToTick(current_tick);
+    driver->player->paused = was_paused;
   }
 
   if (selected_event) {
