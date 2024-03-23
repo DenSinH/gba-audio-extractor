@@ -5,6 +5,8 @@
 #include "util/bin.h"
 #include "util/algorithm.h"
 
+#include <array>
+
 
 Track::Track(const u8* data) {
   Parse(data);
@@ -217,6 +219,9 @@ void Track::Parse(const u8* data) {
         if (*data < 0x80) {
           key = read_byte();
         }
+        else {
+          key = last_note;
+        }
         events.back().meta.eot.key = key;
         break;
       }
@@ -233,27 +238,28 @@ void Track::PostProcess() {
   // filter out meta events and fix TIEs
   std::vector<Event> processed{};
   processed.reserve(events.size());
-  i32 current_tie = -1;
+  std::array<i32, 0x80> current_ties{};
+  std::fill(current_ties.begin(), current_ties.end(), -1);
 
   for (auto& event : events) {
     if (event.type == Event::Type::Meta) {
       // meta events may need to be handled differently
       switch (event.meta.type) {
         case Meta::Type::Tie: {
-          if (current_tie != -1) {
-            Error("Double tie in track");
+          if (current_ties[event.meta.tie.note.key] != -1) {
+            Error("Double note tie in track");
           }
 
           // save the tie, convert to note at EOT
-          current_tie = processed.size();
+          current_ties[event.meta.tie.note.key] = processed.size();
           processed.push_back(event);
           break;
         }
         case Meta::Type::Eot: {
-          if (current_tie == -1) {
-            Error("End of tie without active tie");
+          if (current_ties[event.meta.eot.key] == -1) {
+            Error("End of tie without active tie on note");
           }
-          auto& tie = processed[current_tie];
+          auto& tie = processed[current_ties[event.meta.eot.key]];
           if (event.meta.eot.key > 0 && (tie.meta.tie.note.key != event.meta.eot.key)) {
             Error(
                 "End tie of different note, got %d, expected %d",
@@ -268,7 +274,7 @@ void Track::PostProcess() {
           // change TIE event to note
           tie.type = Event::Type::Note;
           tie.note = note;
-          current_tie = -1;
+          current_ties[event.meta.eot.key] = -1;
           break;
         }
         default: {
@@ -278,14 +284,23 @@ void Track::PostProcess() {
     }
     else {
       // just copy over normal events
-      if ((event.type == Event::Type::Goto) && (current_tie != -1)) {
-        Error("Active tie during GOTO command");
+
+      if (event.type == Event::Type::Goto) {
+        const bool active_tie = std::any_of(current_ties.cbegin(), current_ties.cend(), [](auto element) {
+            return element != -1;
+        });
+        if (active_tie) {
+          Error("Active tie during GOTO command");
+        }
       }
       processed.push_back(event);
     }
   }
 
-  if (current_tie != -1) {
+  const bool active_tie = std::any_of(current_ties.cbegin(), current_ties.cend(), [](auto element) {
+    return element != -1;
+  });
+  if (active_tie) {
     Error("Active tie at FINE");
   }
   events = std::move(processed);

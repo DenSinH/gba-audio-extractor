@@ -94,8 +94,6 @@ void Sequencer::RightClick(int timeline) {
 void Sequencer::Draw() {
   const auto io = ImGui::GetIO();
   
-  ImGui::SetNextWindowPos(ImVec2(0, 50));
-  ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.5 * io.DisplaySize.y));
   ImGui::Begin("Sequencer", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
   if (!(driver && driver->player)) {
     ImGui::End();

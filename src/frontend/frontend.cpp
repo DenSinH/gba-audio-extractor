@@ -224,10 +224,20 @@ int Run(Mp2kDriver* _driver) {
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
-    sequencer.Draw();
+    static constexpr int FileNameHeight = 25;
+    static constexpr int ControlHeight = 50;
+
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 50));
-    if (ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize)) {
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, FileNameHeight));
+    ImGui::Begin("Filename", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
+    {
+      ImGui::Text("%s", filename.c_str());
+    }
+    ImGui::End();
+    ImGui::SetNextWindowPos(ImVec2(0, FileNameHeight));
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, ControlHeight));
+    ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
+    {
       if (ImGui::Button("Choose file")) {
         fdialog.Open();
       }
@@ -258,6 +268,9 @@ int Run(Mp2kDriver* _driver) {
       }
     }
     ImGui::End();
+    ImGui::SetNextWindowPos(ImVec2(0, FileNameHeight + ControlHeight));
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.5 * io.DisplaySize.y));
+    sequencer.Draw();
 
     fdialog.Display();
     if (fdialog.HasSelected()) {
