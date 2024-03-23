@@ -1,16 +1,7 @@
-// adapted from
-// Saptapper: Automated GSF ripper for MusicPlayer2000.
-// at
-// https://github.com/loveemu/saptapper/blob/2da643b718ec6308c4064f5aae769c035c496368/src/saptapper/mp2k_driver.cpp#L165
-
 #include "mp2k_driver.h"
 
 #include <array>
 #include <vector>
-#include <cassert>
-#include <cstring>
-#include <sstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -23,6 +14,10 @@
 
 extern std::vector<u8> file;
 
+// adapted from
+// Saptapper: Automated GSF ripper for MusicPlayer2000.
+// at
+// https://github.com/loveemu/saptapper/blob/2da643b718ec6308c4064f5aae769c035c496368/src/saptapper/mp2k_driver.cpp#L165
 
 static bool memcmp_loose(const u8* buf1, const u8* buf2, size_t n,
                          unsigned int max_diff) {
