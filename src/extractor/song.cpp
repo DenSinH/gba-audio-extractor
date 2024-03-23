@@ -40,6 +40,7 @@ Song Song::Extract(const u8* header) {
   const u8 reverb          = header[HEADER_REVERB_OFFSET];
   const u32 voicegroup_ptr = util::Read<u32>(&header[HEADER_VOICEGROUP_PTR_OFFSET]);
 
+  Debug("Num tracks: %d", num_tracks);
   Debug("Voicegroups at %08x", voicegroup_ptr);
 
   Song song = Song(num_tracks, reverb, util::GetPointer(voicegroup_ptr));

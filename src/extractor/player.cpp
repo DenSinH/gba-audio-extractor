@@ -50,6 +50,9 @@ int Player::GetCurrentTick() const {
   }
 
   // all tracks ended
+  if (statuses.empty()) {
+    return 0;
+  }
   if (tick == -1) {
     return statuses[0].tick;
   }
@@ -90,7 +93,12 @@ void Player::InitTracks() {
   }
 
   if (time_per_tick == 0) {
-    Error("No tempo found at start of song");
+    if (!song.tracks.empty()) {
+      Error("No tempo found at start of song");
+    }
+    else {
+      time_per_tick = std::numeric_limits<double>::infinity();
+    }
   }
 
   // restore external status
