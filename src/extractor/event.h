@@ -54,7 +54,7 @@ struct Meta {
 
   Type type;
   union {
-    struct { Note note; } tie;
+    struct { Note note; i32 tie_diff; } tie;
     struct { i32 key; } eot;
   };
 };

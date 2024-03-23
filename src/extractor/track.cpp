@@ -248,12 +248,18 @@ void Track::PostProcess() {
   const auto end_tie = [&](Event& tie, const Event& event) {
         auto note = tie.meta.tie.note;
         // note length is difference between EOT and TIE
-        note.length = event.tick - tie.tick;
+        note.length = event.tick - tie.tick + tie.meta.tie.tie_diff;
+
+        if (tie.meta.tie.tie_diff) {
+          if (note.length <= 0) {
+            Error("Negative note length in track");
+          }
+        }
 
         // change TIE event to note
         tie.type = Event::Type::Note;
         tie.note = note;
-        current_ties[tie.meta.tie.note.key] = -1;
+        current_ties[note.key] = -1;
   };
 
   for (auto& event : events) {
@@ -296,8 +302,8 @@ void Track::PostProcess() {
           if (tie_idx == -1) {
             continue;
           }
-          Warn("Active tie during GOTO command");
-          end_tie(processed[tie_idx], event);
+          // fix tie length from goto
+          processed[tie_idx].meta.tie.tie_diff += event.tick - event.got.tick;
         }
       }
       processed.push_back(event);
