@@ -37,6 +37,25 @@ VoiceState Voice::GetState([[maybe_unused]] i32 base_key) const {
   return VoiceState(this, -1);
 }
 
+WaveFormData Voice::GetEnvelopeWaveFormData(i32 duration) const {
+  WaveFormData data{};
+  const float dt = duration / 1000;
+  for (int i = 0; i < 1000; i++) {
+    const float time = i * dt;
+    data.AddPoint(time, GetEnvelopeVolume(time, 0));
+  }
+  for (int i = 0; i < 200; i++) {
+    const float time = i * dt;
+    const float env = GetEnvelopeVolume(time, 0);
+    data.AddPoint(duration + time, env);
+    if (env < 1 / 256.0) {
+      break;
+    }
+  }
+
+  return data;
+}
+
 void DirectSound::CalculateEnvelope() {
   // from https://github.com/Kurausukun/pokeemerald/blob/54e55cf040e8ef4b11632a0af14b9f512827d92a/src/sound_mixer.c#L122:
   // MP2K envelope shape

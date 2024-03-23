@@ -31,6 +31,16 @@ private:
   double integrated_time = 0;
 };
 
+struct WaveFormData {
+  std::vector<float> xdata{};
+  std::vector<float> ydata{};
+
+  void AddPoint(float x, float y) {
+    xdata.emplace_back(x);
+    ydata.emplace_back(y);
+  }
+};
+
 struct Voice {
   enum Type : u8 {
     DirectSound = 0,
@@ -59,6 +69,8 @@ struct Voice {
   virtual ~Voice() = default;
 
   virtual VoiceState GetState(i32 midi_key) const;
+  virtual WaveFormData GetWaveFormData(i32 midi_key) const { return {}; };
+  WaveFormData GetEnvelopeWaveFormData(i32 duration) const;
 
 protected:
   friend struct Keysplit;
@@ -90,6 +102,8 @@ struct DirectSound final : public Voice {
   u32 loop_start;
   bool do_loop;
 
+  // WaveFormData GetWaveFormData(i32 midi_key) const final;
+
   double GetFrequency(double midi_key) const final;
   double WaveForm(double integrated_time) const final;
   double GetEnvelopeVolume(double dt, double time_since_release) const final;
@@ -110,6 +124,8 @@ struct ProgrammableWave final : public CgbVoice {
   // always 16 bytes
   std::array<u8, 16> samples{};
 
+  // WaveFormData GetWaveFormData(i32 midi_key) const final;
+
   double WaveForm(double integrated_time) const final;
 };
 
@@ -117,6 +133,8 @@ struct ProgrammableWave final : public CgbVoice {
 struct Square final : public CgbVoice {
   u8 sweep;
   u8 duty_cycle;
+  
+  // WaveFormData GetWaveFormData(i32 midi_key) const final;
 
   double WaveForm(double integrated_time) const final;
 
@@ -132,6 +150,8 @@ private:
 
 struct Noise final : public CgbVoice {
   u8 period;
+  
+  // WaveFormData GetWaveFormData(i32 midi_key) const final;
 
   // noise frequency is special
   double GetFrequency(double midi_key) const final;
@@ -147,6 +167,8 @@ struct Keysplit final : public Voice {
 
   // get state for nested voice
   VoiceState GetState(i32 midi_key) const final;
+
+  // WaveFormData GetWaveFormData(i32 midi_key) const final;
 
   // these will all raise an error, since
   // there is no waveform / envelope for a keysplit voice

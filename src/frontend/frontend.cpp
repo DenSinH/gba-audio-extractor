@@ -276,6 +276,15 @@ int Run(Mp2kDriver* _driver) {
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.5 * io.DisplaySize.y));
     sequencer.Draw();
 
+    ImGui::SetNextWindowPos(ImVec2(0.6 * io.DisplaySize.x, FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y));
+    ImGui::SetNextWindowSize(ImVec2(0.4 * io.DisplaySize.x, io.DisplaySize.y - (FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y)));
+    ImGui::Begin("Voice Envelope", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
+    const auto* e = sequencer.SelectedEvent();
+    if (e && e->type == Event::Type::Note) {
+      // const auto* voice = e->note.voice
+    }
+    ImGui::End();    
+
     if (fdialog.IsOpened()) {
       ImGui::EndDisabled();
     }

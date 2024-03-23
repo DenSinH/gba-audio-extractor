@@ -6,7 +6,7 @@ add_library(Frontend STATIC
         settings.cpp
         settings.h
         widgets/sequencer.cpp
-        widgets/sequencer.h 
+        widgets/sequencer.h
         widgets/event_tables.cpp 
         widgets/event_tables.h)
 

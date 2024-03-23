@@ -1,3 +1,6 @@
 [submodule "src/frontend/modules/imgui"]
 	path = src/frontend/modules/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "src/frontend/modules/implot"]
+	path = src/frontend/modules/implot
+	url = https://github.com/epezent/implot.git

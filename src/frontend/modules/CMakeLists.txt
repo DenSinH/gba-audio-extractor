@@ -12,7 +12,12 @@ add_library(ImGui STATIC
         ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
         imgui-filebrowser/imfilebrowser.h
         sequencer/ImSequencer.cpp
-        sequencer/ImSequencer.h)
+        sequencer/ImSequencer.h
+        implot/implot_internal.h
+        implot/implot_items.cpp
+        implot/implot.h
+        implot/implot.cpp
+)
 
 target_include_directories(ImGui PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}

@@ -14,6 +14,7 @@ struct Sequencer final : public ImSequencer::SequenceInterface {
 
   void Draw();
   void SelectSong();
+  const Event* SelectedEvent() const { return selected_event; }
 
 private:
   bool was_paused = false;
