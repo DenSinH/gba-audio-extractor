@@ -245,6 +245,17 @@ void Track::PostProcess() {
   std::array<i32, 0x80> current_ties{};
   std::fill(current_ties.begin(), current_ties.end(), -1);
 
+  const auto end_tie = [&](Event& tie, const Event& event) {
+        auto note = tie.meta.tie.note;
+        // note length is difference between EOT and TIE
+        note.length = event.tick - tie.tick;
+
+        // change TIE event to note
+        tie.type = Event::Type::Note;
+        tie.note = note;
+        current_ties[tie.meta.tie.note.key] = -1;
+  };
+
   for (auto& event : events) {
     if (event.type == Event::Type::Meta) {
       // meta events may need to be handled differently
@@ -270,15 +281,7 @@ void Track::PostProcess() {
                 tie.meta.tie.note.key, event.meta.eot.key
             );
           }
-
-          auto note = tie.meta.tie.note;
-          // note length is difference between EOT and TIE
-          note.length = event.tick - tie.tick;
-
-          // change TIE event to note
-          tie.type = Event::Type::Note;
-          tie.note = note;
-          current_ties[event.meta.eot.key] = -1;
+          end_tie(tie, event);
           break;
         }
         default: {
@@ -289,22 +292,24 @@ void Track::PostProcess() {
     else {
       // just copy over normal events
       if (event.type == Event::Type::Goto) {
-        const bool active_tie = std::any_of(current_ties.cbegin(), current_ties.cend(), [](auto element) {
-            return element != -1;
-        });
-        if (active_tie) {
-          Error("Active tie during GOTO command");
+        for (const auto& tie_idx : current_ties) {
+          if (tie_idx == -1) {
+            continue;
+          }
+          Warn("Active tie during GOTO command");
+          end_tie(processed[tie_idx], event);
         }
       }
       processed.push_back(event);
     }
   }
 
-  const bool active_tie = std::any_of(current_ties.cbegin(), current_ties.cend(), [](auto element) {
-    return element != -1;
-  });
-  if (active_tie) {
-    Error("Active tie at FINE");
+  for (const auto& tie_idx : current_ties) {
+    if (tie_idx == -1) {
+      continue;
+    }
+    Warn("Active tie at FINE");
+    end_tie(processed[tie_idx], events.back());
   }
   events = std::move(processed);
 }

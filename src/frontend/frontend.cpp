@@ -224,6 +224,10 @@ int Run(Mp2kDriver* _driver) {
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
+    if (fdialog.IsOpened()) {
+      ImGui::BeginDisabled();
+    }
+
     static constexpr int FileNameHeight = 25;
     static constexpr int ControlHeight = 50;
 
@@ -242,8 +246,8 @@ int Run(Mp2kDriver* _driver) {
         fdialog.Open();
       }
       ImGui::SameLine();
-      ImGui::SetNextItemWidth(200);
-      if (ImGui::InputInt("Song ID", &songidx)) {
+      ImGui::SetNextItemWidth(150);
+      if (ImGui::InputInt(("Song ID / " + std::to_string(driver->song_count)).c_str(), &songidx)) {
         songidx = std::clamp(songidx, 0, driver->song_count);
         settings.Set("songidx", songidx);
         if (songidx < driver->song_count) {
@@ -272,6 +276,9 @@ int Run(Mp2kDriver* _driver) {
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.5 * io.DisplaySize.y));
     sequencer.Draw();
 
+    if (fdialog.IsOpened()) {
+      ImGui::EndDisabled();
+    }
     fdialog.Display();
     if (fdialog.HasSelected()) {
       filename = fdialog.GetSelected().string();
