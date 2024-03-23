@@ -225,6 +225,10 @@ void Track::Parse(const u8* data) {
         events.back().meta.eot.key = key;
         break;
       }
+      case GbaCmd::PRIO: {
+        u8 prio = read_byte();
+        break;
+      }
       case GbaCmd::MEMACC:
       case GbaCmd::XCMD:
       default: {
@@ -284,7 +288,6 @@ void Track::PostProcess() {
     }
     else {
       // just copy over normal events
-
       if (event.type == Event::Type::Goto) {
         const bool active_tie = std::any_of(current_ties.cbegin(), current_ties.cend(), [](auto element) {
             return element != -1;

@@ -229,6 +229,10 @@ void Player::TickEvents(const Track& track, TrackStatus& status) {
         break;
       }
       case Event::Type::Note: {
+        if (!status.voice) {
+          // todo: default voice?
+          break;
+        }
         status.current_notes.push_back(PlayingNote{
             global_time - fine_time,
             event.tick,

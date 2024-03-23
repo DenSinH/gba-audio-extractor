@@ -24,6 +24,9 @@ int main() {
   // find song table from saptapper
   // https://github.com/loveemu/saptapper/blob/2da643b718ec6308c4064f5aae769c035c496368/src/saptapper/mp2k_driver.cpp#L165
 
+  // commands: https://loveemu.github.io/vgmdocs/Summary_of_GBA_Standard_Sound_Driver_MusicPlayer2000.html
+  // and gba2mid / mid2gba
+
   // offsets, see https://github.com/zeldaret/tmc/blob/cd2b8d4b531ee5b4b78d04964a3f895edc31db73/assets/sounds.json#L665
   // bgmBossTheme
 //  u32 start = 14524276;
