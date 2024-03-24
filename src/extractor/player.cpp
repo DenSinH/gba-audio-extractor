@@ -292,7 +292,7 @@ void Player::TickNotes(const Track& track, TrackStatus& status) {
 }
 
 void Player::TickTrack(const Track& track, TrackStatus& status) {
-  if (status.current_event->type == Event::Type::Fine) {
+  if (status.track_ended) {
     // track finished
     status.current_notes = {};
     return;
