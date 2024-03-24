@@ -15,3 +15,13 @@ add_subdirectory(src/extractor)
 add_subdirectory(src/frontend)
 
 target_link_libraries(GbaMusicExtractor Extractor Frontend)
+
+if(WIN32)
+    set(SDL_DLL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/files/SDL2.dll")
+    add_custom_command(TARGET GbaMusicExtractor POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SDL_DLL_PATH}"
+        "${CMAKE_BINARY_DIR}"
+        COMMENT "Copying SDL2.dll to build directory"
+    )
+endif()
