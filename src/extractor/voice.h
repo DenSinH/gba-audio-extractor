@@ -31,7 +31,7 @@ struct VoiceState {
   void Tick(i32 midi_key, double pitch_adjust, double dt);
   double GetSample(double time_since_release) const;
 
-  WaveFormData GetEnvelopeWaveFormData(i32 duration) const;
+  WaveFormData GetEnvelopeWaveFormData() const;
   WaveFormData GetWaveFormData() const;
 
 private:
@@ -192,6 +192,8 @@ private:
 struct VoiceGroup {
   explicit VoiceGroup(const u8* data) : data{data}, original_data{data} {}
 
+  u32 GetRomLoc() const;
+  u32 CurrentSize() const { return voices.size(); }
   const Voice& operator[](u32 index) const;
 
 private:

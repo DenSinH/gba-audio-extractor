@@ -45,7 +45,7 @@ WaveFormData VoiceState::GetWaveFormData() const {
   return data;
 }
 
-WaveFormData VoiceState::GetEnvelopeWaveFormData(i32 duration) const {
+WaveFormData VoiceState::GetEnvelopeWaveFormData() const {
   WaveFormData data{};
   const float total_time = voice->attack_time + voice->decay_time + 0.5;
   const float dt = total_time / 1000.0;
@@ -318,6 +318,10 @@ VoiceState Keysplit::GetState(i32 midi_key) const {
     key = voice.base;
   }
   return voice.GetState(key);
+}
+
+u32 VoiceGroup::GetRomLoc() const {
+  return AGB_ROM_OFFSET + (original_data - file.data());
 }
 
 const Voice& VoiceGroup::operator[](u32 index) const {

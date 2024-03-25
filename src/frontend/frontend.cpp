@@ -24,12 +24,16 @@ static SDL_GLContext gl_context;
 static const char* glsl_version = "#version 130";
 
 static Mp2kDriver* driver = nullptr;
+static auto sequencer = Sequencer(nullptr);
 
 static Settings settings = {};
 static std::string filename = {};
 static float volumesq = 0.25f;
 static int songidx = 0;
 
+static const Event* selected_event = nullptr;
+
+static int voice_idx = -1;
 static WaveFormData envelope = {};
 static WaveFormData waveform = {};
 
@@ -169,16 +173,48 @@ static void Destroy() {
   SDL_Quit();
 }
 
+void SetWaveForm(const Voice& voice, i32 key) {
+  const auto state = voice.GetState(key);
+  envelope = state.GetEnvelopeWaveFormData();
+  waveform = state.GetWaveFormData();
+}
+
+void ResetWaveForm() {
+  voice_idx = -1;
+  envelope = {};
+  waveform = {};
+}
+
+void PlotWaveForm(const WaveFormData& wave, const char* name, float ymin, float ymax) {
+  ImGui::Begin(name, nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
+  if (wave.xdata.size()) {
+    if (ImPlot::BeginPlot(name, ImVec2(-1, 0), ImPlotFlags_CanvasOnly)) {
+      ImPlot::SetupAxis(0, nullptr, ImPlotAxisFlags_NoDecorations);
+      ImPlot::SetupAxis(1, nullptr, ImPlotAxisFlags_NoDecorations);
+      ImPlot::SetupAxesLimits(0, wave.xdata.back(), ymin, ymax, ImPlotCond_Always);
+      ImPlot::PlotLine("", wave.xdata.data(), wave.ydata.data(), wave.xdata.size());
+      ImPlot::EndPlot();
+    }
+  }
+  ImGui::End();  
+} 
+
+void SelectSong() {
+  driver->SelectSong(songidx);
+  sequencer.SelectSong();
+  ResetWaveForm();
+}
 
 int Run(Mp2kDriver* _driver) {
-  driver = _driver;
   InitSDL();
   InitImGui();
   InitSettings();
 
+  driver = _driver;
+  sequencer = Sequencer(driver);
+
   ImGuiIO& io = ImGui::GetIO();
-  auto sequencer = Sequencer(driver);
-  const Event* selected_event = nullptr;
+
   auto fdialog = ImGui::FileBrowser();
   fdialog.SetTitle("Choose ROM");
   fdialog.SetTypeFilters({".gba", ".bin"});
@@ -193,8 +229,7 @@ int Run(Mp2kDriver* _driver) {
   if (!filename.empty()) {
     driver->Init(filename);
     if (songidx < driver->song_count) {
-      driver->SelectSong(songidx);
-      sequencer.SelectSong();
+      SelectSong();
     }
   }
 
@@ -223,6 +258,7 @@ int Run(Mp2kDriver* _driver) {
     static constexpr int FileNameHeight = 25;
     static constexpr int ControlHeight = 50;
 
+    // FILENAME
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, FileNameHeight));
     ImGui::Begin("Filename", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
@@ -230,6 +266,8 @@ int Run(Mp2kDriver* _driver) {
       ImGui::Text("%s", filename.c_str());
     }
     ImGui::End();
+
+    // CONTROLS
     ImGui::SetNextWindowPos(ImVec2(0, FileNameHeight));
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, ControlHeight));
     ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
@@ -240,11 +278,10 @@ int Run(Mp2kDriver* _driver) {
       ImGui::SameLine();
       ImGui::SetNextItemWidth(150);
       if (ImGui::InputInt(("Song ID / " + std::to_string(driver->song_count)).c_str(), &songidx)) {
-        songidx = std::clamp(songidx, 0, driver->song_count);
+        songidx = std::clamp(songidx, 0, driver->song_count - 1);
         settings.Set("songidx", songidx);
         if (songidx < driver->song_count) {
-          driver->SelectSong(songidx);
-          sequencer.SelectSong();
+          SelectSong();
         }
       }
       if (!driver->player) {
@@ -264,55 +301,63 @@ int Run(Mp2kDriver* _driver) {
       }
     }
     ImGui::End();
+
+    // SEQUENCER
     ImGui::SetNextWindowPos(ImVec2(0, FileNameHeight + ControlHeight));
-    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.5 * io.DisplaySize.y));
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.4 * io.DisplaySize.y));
     sequencer.Draw();
 
+    // WAVEFORMS
+    // check if note was selected
     const auto* e = sequencer.SelectedEvent();
     if (e != selected_event) {
       selected_event = e;
       if (selected_event) {
         if (selected_event->type == Event::Type::Note) {
-          const auto* voice = driver->player->GetVoiceAtTick(sequencer.SelectedTrack(), selected_event->tick);
-          const auto state = voice->GetState(selected_event->note.key);
-          envelope = state.GetEnvelopeWaveFormData(selected_event->note.length);
-          waveform = state.GetWaveFormData();
+          const auto voice = driver->player->GetVoiceAtTick(sequencer.SelectedTrack(), selected_event->tick);
+          if (voice.second) {
+            voice_idx = voice.first;
+            SetWaveForm(*voice.second, selected_event->note.key);
+          }
         }
       }
       else {
-        envelope = {};
-        waveform = {};
+        ResetWaveForm();
       }
     }
 
-    ImGui::SetNextWindowPos(ImVec2(0.6 * io.DisplaySize.x, FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y));
-    ImGui::SetNextWindowSize(ImVec2(0.4 * io.DisplaySize.x, io.DisplaySize.y - (FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y)));
-    ImGui::Begin("Voice Envelope", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
-    if (envelope.xdata.size()) {
-      if (ImPlot::BeginPlot("Envelope", ImVec2(-1, 0), ImPlotFlags_CanvasOnly)) {
-        ImPlot::SetupAxis(0, nullptr, ImPlotAxisFlags_NoDecorations);
-        ImPlot::SetupAxis(1, nullptr, ImPlotAxisFlags_NoDecorations);
-        ImPlot::SetupAxesLimits(0, envelope.xdata.back(), 0, 1.1, ImPlotCond_Always);
-        ImPlot::PlotLine("", envelope.xdata.data(), envelope.ydata.data(), envelope.xdata.size());
-        ImPlot::EndPlot();
+    const float YStart = FileNameHeight + ControlHeight + 0.4 * io.DisplaySize.y;
+    const float RemainingHeight = io.DisplaySize.y - YStart;
+
+    // manual voice select controls
+    ImGui::SetNextWindowPos(ImVec2(0, YStart));
+    ImGui::SetNextWindowSize(ImVec2(0.2 * io.DisplaySize.x, RemainingHeight));
+    ImGui::Begin("VoiceGroup", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
+    if (driver->player) {
+      ImGui::Text("Voicegroup at %08x", driver->player->song.voicegroup.GetRomLoc());
+      if (ImGui::InputInt("Voice", &voice_idx)) {
+        voice_idx = std::clamp<int>(voice_idx, -1, driver->player->song.voicegroup.CurrentSize() - 1);
+        if (voice_idx > -1) {
+          const auto& voice = driver->player->song.voicegroup[voice_idx];
+          SetWaveForm(voice, 0);  // todo: key for keysplit voice
+        }
+        else {
+          ResetWaveForm();
+        }
       }
     }
-    ImGui::End();  
+    ImGui::End();
 
-    ImGui::SetNextWindowPos(ImVec2(0.2 * io.DisplaySize.x, FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y));
-    ImGui::SetNextWindowSize(ImVec2(0.4 * io.DisplaySize.x, io.DisplaySize.y - (FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y)));
-    ImGui::Begin("Voice Waveform", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
-    if (waveform.xdata.size()) {
-      if (ImPlot::BeginPlot("Waveform", ImVec2(-1, 0), ImPlotFlags_CanvasOnly)) {
-        ImPlot::SetupAxis(0, nullptr, ImPlotAxisFlags_NoDecorations);
-        ImPlot::SetupAxis(1, nullptr, ImPlotAxisFlags_NoDecorations);
-        ImPlot::SetupAxesLimits(0, waveform.xdata.back(), -1.1, 1.1, ImPlotCond_Always);
-        ImPlot::PlotLine("", waveform.xdata.data(), waveform.ydata.data(), waveform.xdata.size());
-        ImPlot::EndPlot();
-      }
-    }
-    ImGui::End();  
+    // waveforms
+    ImGui::SetNextWindowPos(ImVec2(0.6 * io.DisplaySize.x, YStart));
+    ImGui::SetNextWindowSize(ImVec2(0.4 * io.DisplaySize.x, RemainingHeight));
+    PlotWaveForm(envelope, "Voice Envelope", 0, 1.1);
 
+    ImGui::SetNextWindowPos(ImVec2(0.2 * io.DisplaySize.x, YStart));
+    ImGui::SetNextWindowSize(ImVec2(0.4 * io.DisplaySize.x, RemainingHeight));
+    PlotWaveForm(waveform, "Voice Waveform", -1.1, 1.1);
+
+    // FILE DIALOG
     if (fdialog.IsOpened()) {
       ImGui::EndDisabled();
     }

@@ -126,9 +126,7 @@ void Sequencer::Draw() {
   if (selected_event) {
     ImGui::Text("Event type: %s", EventNames.at(selected_event->type));
     if (selected_event->type == Event::Type::Note) {
-      ImGui::Text("Note:     %s", NoteNames.at(selected_event->note.key));
-      ImGui::Text("Duration: %d", selected_event->note.length);
-      ImGui::Text("Velocity: %d", selected_event->note.velocity);
+      ImGui::Text("Note: %s [L %d, v %d]", NoteNames.at(selected_event->note.key), selected_event->note.length, selected_event->note.velocity);
     }
     else if (selected_event->type == Event::Type::Controller) {
       ImGui::Text("Controller: %s %02x", ControllerEventNames.at(selected_event->controller.type), selected_event->controller.val);

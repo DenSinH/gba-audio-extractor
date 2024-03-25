@@ -31,7 +31,7 @@ struct Player {
   bool GetTrackEnable(i32 track);
   int GetCurrentTick() const;
   void SkipToTick(i32 tick);
-  const Voice* GetVoiceAtTick(i32 track, i32 tick) const;
+  std::pair<int, const Voice*> GetVoiceAtTick(i32 track, i32 tick) const;
   const Note* GetTrackNote(i32 track);
 
 private:

@@ -77,17 +77,20 @@ void Player::SkipToTick(i32 tick) {
   }
 }
 
-const Voice* Player::GetVoiceAtTick(i32 track, i32 tick) const {
+std::pair<int, const Voice*> Player::GetVoiceAtTick(i32 track, i32 tick) const {
+  int idx = -1;
   const Voice* voice = nullptr;
   for (const auto& event : song.tracks[track].events) {
     if (event.tick > tick) {
       break;
     }
     if (event.type == Event::Type::VoiceChange) {
-      voice = &song.voicegroup[event.voice_change.voice];
+      idx = event.voice_change.voice;
+      voice = &song.voicegroup[idx];
     }
   }
-  return voice;
+  
+  return {idx, voice};
 }
 
 void Player::InitTracks() {
