@@ -15,6 +15,7 @@ struct Sequencer final : public ImSequencer::SequenceInterface {
   void Draw();
   void SelectSong();
   const Event* SelectedEvent() const { return selected_event; }
+  i32 SelectedTrack() const { return selected_track; }
 
 private:
   bool was_paused = false;
@@ -24,6 +25,7 @@ private:
   int current_tick = 0;
   int first_frame = 0;
 
+  i32 selected_track = 0;
   const Event* selected_event = nullptr;
 
   int GetFrameMin() const final;

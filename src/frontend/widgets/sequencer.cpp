@@ -83,6 +83,7 @@ void Sequencer::Get(int timeline, int index, int* start, int* end, unsigned int*
 
 void Sequencer::DoubleClick(int timeline, int index) {
   assert(driver && driver->player);
+  selected_track = timeline;
   selected_event = &driver->player->song.tracks[timeline].events[index];
 }
 

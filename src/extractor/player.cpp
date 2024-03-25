@@ -77,6 +77,19 @@ void Player::SkipToTick(i32 tick) {
   }
 }
 
+const Voice* Player::GetVoiceAtTick(i32 track, i32 tick) const {
+  const Voice* voice = nullptr;
+  for (const auto& event : song.tracks[track].events) {
+    if (event.tick > tick) {
+      break;
+    }
+    if (event.type == Event::Type::VoiceChange) {
+      voice = &song.voicegroup[event.voice_change.voice];
+    }
+  }
+  return voice;
+}
+
 void Player::InitTracks() {
   // save external status
   std::vector<TrackStatus::ExternalControl> controls{};

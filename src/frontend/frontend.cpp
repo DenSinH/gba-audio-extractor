@@ -3,25 +3,18 @@
 #include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
+#include "modules/imgui-filebrowser/imfilebrowser.h"
+#include "modules/implot/implot.h"
 #include <cstdio>
 #include <iostream>
 #include <cmath>
 #include <SDL.h>
 #include "extractor/mp2k_driver.h"
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#include <SDL_opengles2.h>
-#else
+#include "extractor/voice.h"
 #include "glad/glad.h"
-#endif
-
-// This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
-#ifdef __EMSCRIPTEN__
-#include "../libs/emscripten/emscripten_mainloop_stub.h"
-#endif
 
 #include "settings.h"
 #include "widgets/sequencer.h"
-#include "modules/imgui-filebrowser/imfilebrowser.h"
 #include "constants.h"
 
 namespace frontend {
@@ -36,6 +29,9 @@ static Settings settings = {};
 static std::string filename = {};
 static float volumesq = 0.25f;
 static int songidx = 0;
+
+static WaveFormData envelope = {};
+static WaveFormData waveform = {};
 
 
 static void AudioCallback(void*, u8* _stream, int len) {
@@ -141,6 +137,8 @@ static void InitImGui() {
   // Setup Platform/Renderer backends
   ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
   ImGui_ImplOpenGL3_Init(glsl_version);
+
+  ImPlot::CreateContext();
 }
 
 static void InitSettings() {
@@ -180,6 +178,7 @@ int Run(Mp2kDriver* _driver) {
 
   ImGuiIO& io = ImGui::GetIO();
   auto sequencer = Sequencer(driver);
+  const Event* selected_event = nullptr;
   auto fdialog = ImGui::FileBrowser();
   fdialog.SetTitle("Choose ROM");
   fdialog.SetTypeFilters({".gba", ".bin"});
@@ -201,14 +200,7 @@ int Run(Mp2kDriver* _driver) {
 
   // Main loop
   bool done = false;
-#ifdef __EMSCRIPTEN__
-  // For an Emscripten build we are disabling file-system access, so let's not attempt to do a fopen() of the imgui.ini file.
-    // You may manually call LoadIniSettingsFromMemory() to load settings from your own storage.
-    io.IniFilename = NULL;
-    EMSCRIPTEN_MAINLOOP_BEGIN
-#else
   while (!done)
-#endif
   {
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -276,14 +268,50 @@ int Run(Mp2kDriver* _driver) {
     ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, 0.5 * io.DisplaySize.y));
     sequencer.Draw();
 
+    const auto* e = sequencer.SelectedEvent();
+    if (e != selected_event) {
+      selected_event = e;
+      if (selected_event) {
+        if (selected_event->type == Event::Type::Note) {
+          const auto* voice = driver->player->GetVoiceAtTick(sequencer.SelectedTrack(), selected_event->tick);
+          const auto state = voice->GetState(selected_event->note.key);
+          envelope = state.GetEnvelopeWaveFormData(selected_event->note.length);
+          waveform = state.GetWaveFormData();
+        }
+      }
+      else {
+        envelope = {};
+        waveform = {};
+      }
+    }
+
     ImGui::SetNextWindowPos(ImVec2(0.6 * io.DisplaySize.x, FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y));
     ImGui::SetNextWindowSize(ImVec2(0.4 * io.DisplaySize.x, io.DisplaySize.y - (FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y)));
     ImGui::Begin("Voice Envelope", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
-    const auto* e = sequencer.SelectedEvent();
-    if (e && e->type == Event::Type::Note) {
-      // const auto* voice = e->note.voice
+    if (envelope.xdata.size()) {
+      if (ImPlot::BeginPlot("Envelope", ImVec2(-1, 0), ImPlotFlags_CanvasOnly)) {
+        ImPlot::SetupAxis(0, nullptr, ImPlotAxisFlags_NoDecorations);
+        ImPlot::SetupAxis(1, nullptr, ImPlotAxisFlags_NoDecorations);
+        ImPlot::SetupAxesLimits(0, envelope.xdata.back(), 0, 1.1, ImPlotCond_Always);
+        ImPlot::PlotLine("", envelope.xdata.data(), envelope.ydata.data(), envelope.xdata.size());
+        ImPlot::EndPlot();
+      }
     }
-    ImGui::End();    
+    ImGui::End();  
+
+    ImGui::SetNextWindowPos(ImVec2(0.2 * io.DisplaySize.x, FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y));
+    ImGui::SetNextWindowSize(ImVec2(0.4 * io.DisplaySize.x, io.DisplaySize.y - (FileNameHeight + ControlHeight + 0.5 * io.DisplaySize.y)));
+    ImGui::Begin("Voice Waveform", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
+    if (waveform.xdata.size()) {
+      if (ImPlot::BeginPlot("Waveform", ImVec2(-1, 0), ImPlotFlags_CanvasOnly)) {
+        ImPlot::SetupAxis(0, nullptr, ImPlotAxisFlags_NoDecorations);
+        ImPlot::SetupAxis(1, nullptr, ImPlotAxisFlags_NoDecorations);
+        ImPlot::SetupAxesLimits(0, waveform.xdata.back(), -1.1, 1.1, ImPlotCond_Always);
+        ImPlot::PlotLine("", waveform.xdata.data(), waveform.ydata.data(), waveform.xdata.size());
+        ImPlot::EndPlot();
+      }
+    }
+    ImGui::End();  
 
     if (fdialog.IsOpened()) {
       ImGui::EndDisabled();
@@ -308,9 +336,6 @@ int Run(Mp2kDriver* _driver) {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(window);
   }
-#ifdef __EMSCRIPTEN__
-  EMSCRIPTEN_MAINLOOP_END;
-#endif
 
   Destroy();
 

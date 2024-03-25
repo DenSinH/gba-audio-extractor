@@ -27,33 +27,49 @@ double VoiceState::GetSample(double time_since_release) const {
   return wave_sample * envelope_volume;
 }
 
-double VoiceState::GetEnvelopeVolume(double time_since_start, double time_since_release) {
+double VoiceState::GetEnvelopeVolume(double time_since_start, double time_since_release) const {
   return voice->GetEnvelopeVolume(time_since_start, time_since_release);
 }
 
-// in general, we don't need the base_key for the voice state
-// so we set it to -1
-VoiceState Voice::GetState([[maybe_unused]] i32 base_key) const {
-  return VoiceState(this, -1);
+WaveFormData VoiceState::GetWaveFormData() const {
+  WaveFormData voice_data = voice->GetWaveFormData();
+  if (voice_data.xdata.size() < 2000) {
+    return voice_data;
+  }
+  WaveFormData data = {};
+  const auto size = voice_data.xdata.size();
+  for (int i = 0; i < 2000; i++) {
+    const auto idx = (i * size) / 2000;
+    data.AddPoint(voice_data.xdata[idx], voice_data.ydata[idx]);
+  }
+  return data;
 }
 
-WaveFormData Voice::GetEnvelopeWaveFormData(i32 duration) const {
+WaveFormData VoiceState::GetEnvelopeWaveFormData(i32 duration) const {
   WaveFormData data{};
-  const float dt = duration / 1000;
+  const float total_time = voice->attack_time + voice->decay_time + 0.5;
+  const float dt = total_time / 1000.0;
   for (int i = 0; i < 1000; i++) {
     const float time = i * dt;
     data.AddPoint(time, GetEnvelopeVolume(time, 0));
   }
   for (int i = 0; i < 200; i++) {
     const float time = i * dt;
-    const float env = GetEnvelopeVolume(time, 0);
-    data.AddPoint(duration + time, env);
-    if (env < 1 / 256.0) {
+    const float env = GetEnvelopeVolume(total_time + time, time);
+    data.AddPoint(total_time + time, env);
+    if (env < 0.1 / 256.0) {
       break;
     }
   }
 
   return data;
+}
+
+
+// in general, we don't need the base_key for the voice state
+// so we set it to -1
+VoiceState Voice::GetState([[maybe_unused]] i32 base_key) const {
+  return VoiceState(this, -1);
 }
 
 void DirectSound::CalculateEnvelope() {
@@ -115,6 +131,14 @@ double DirectSound::GetEnvelopeVolume(double time_since_start, double time_since
 
 double DirectSound::GetFrequency(double midi_key) const {
   return MidiKeyToFreq(freq, midi_key);
+}
+
+WaveFormData DirectSound::GetWaveFormData() const {
+  WaveFormData data{};
+  for (int i = 0; i < samples.size(); i++) {
+    data.AddPoint(i, i8(samples[i]) / 256.0);
+  }
+  return data;
 }
 
 double DirectSound::WaveForm(double integrated_time) const {
@@ -179,6 +203,16 @@ double CgbVoice::GetFrequency(double midi_key) const {
   return CgbMidiKeyToFreq(midi_key);
 }
 
+WaveFormData ProgrammableWave::GetWaveFormData() const {
+  WaveFormData data{};
+  for (int i = 0; i < samples.size(); i++) {
+    u8 sample = samples[i >> 1];
+    data.AddPoint(2 * i, (sample >> 4) / 15.0);
+    data.AddPoint(2 * i + 1, (sample & 0xf) / 15.0);
+  }
+  return data;
+}
+
 double ProgrammableWave::WaveForm(double integrated_time) const {
   // sample rate is 2097152 / 131072 = 16 times the frequency of the noise channel,
   integrated_time *= 16;
@@ -206,6 +240,16 @@ double ProgrammableWave::WaveForm(double integrated_time) const {
   return (1 - sample_index_fine) * (sample / 15.0) + sample_index_fine * (next_sample / 15.0) - 0.5;
 }
 
+WaveFormData Square::GetWaveFormData() const {
+  WaveFormData data{};
+  for (int i = 0; i < 8; i++) {
+    const float sample = (DutyCycle[duty_cycle] & (0x80 >> u32(i))) ? -0.5 : 0.5;
+    data.AddPoint(i, sample);
+    data.AddPoint(i + 1, sample);
+  }
+  return data;
+}
+
 double Square::WaveForm(double integrated_time) const {
   double in_period = integrated_time - std::floor(integrated_time);
 
@@ -214,6 +258,12 @@ double Square::WaveForm(double integrated_time) const {
 
 double Noise::GetFrequency(double midi_key) const {
   return NoiseFreqTable[(i32)midi_key];
+}
+
+WaveFormData Noise::GetWaveFormData() const {
+  WaveFormData data{};
+  
+  return data;
 }
 
 double Noise::WaveForm(double integrated_time) const {
@@ -248,6 +298,10 @@ double Keysplit::GetEnvelopeVolume(double time_since_start, double time_since_re
 
 double Keysplit::GetFrequency(double midi_key) const {
   Error("Attempted to get frequency of keysplit voice");
+}
+
+WaveFormData Keysplit::GetWaveFormData() const {
+  Error("Attempted to get waveformdata of keysplit voice");
 }
 
 double Keysplit::WaveForm(double integrated_time) const {
